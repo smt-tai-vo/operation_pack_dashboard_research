@@ -1,43 +1,58 @@
-# SmartOS — Maintenance dashboard prototype
+# SmartOS — Maintenance operations prototype
 
-React + Vite. Dữ liệu demo, không kết nối backend hoặc database.
+React + Vite. The interface, sample content, CSV exports and accessibility labels are in English. All data is a static demo as of **22 Oct 2026, 10:30 (UTC+7)**; there is no backend or database connection. Refresh to reset trial actions.
 
 ```sh
 pnpm install
 pnpm dev
+pnpm test
+pnpm build
 ```
 
-Mở địa chỉ Vite hiển thị. Chuyển PMS / MPA ở thanh trên cùng.
+## Pages
 
-- **PMS — Dashboard (`#dashboard`):** hiện trạng ticket/WO, phân bố trạng thái và các nhóm cần theo dõi. Bấm KPI, thanh trạng thái hoặc từng dòng (quá hạn, chờ duyệt, tạm dừng…) để mở modal đúng danh sách.
-- **PMS — Báo cáo (`#reports`):** kết quả theo kỳ, biểu đồ tiếp nhận/xử lý, SLA xử lý và hiệu quả nhân viên. Bấm số liệu, điểm biểu đồ hoặc kết quả nhân viên để xem dữ liệu chi tiết.
-- Hai trang có menu riêng, hỗ trợ tải lại và Back/Forward. Bộ lọc Location/loại ticket giữ khi chuyển trang trong PMS. Kỳ ngày chỉ áp dụng cho Báo cáo; Dashboard luôn phản ánh hiện tại.
-- **Phân tích Ticket Request:** Top loại sự cố xuất hiện nhiều nhất (theo ngày tạo, gồm ticket hủy), loại được xử lý nhiều nhất (theo Resolved, loại hủy/thiếu mốc hợp lệ) và Location có nhiều request nhất. Mọi biểu đồ kế thừa Location/loại ticket/kỳ và mở danh sách ticket đúng nhóm khi bấm.
-- **Bố cục gọn:** hai khối Ticket/WO, mỗi khối chỉ hiển thị một lần số tạo mới, hoàn tất, SLA xử lý, Phản hồi TB và Xử lý TB. So sánh kỳ trước nằm ngay dưới số ticket tạo mới. Không có biểu đồ SLA lặp lại. Xếp hạng loại sự cố chuyển giữa Phát sinh / Xử lý thay vì hai biểu đồ giống bố cục. Các bảng chi tiết loại sự cố, workflow và staff mặc định thu gọn; bấm để mở.
-- **Hiệu quả theo loại:** sắp xếp theo số mới, đã xử lý, quá hạn hoặc thời gian xử lý chậm nhất. Số mới/Resolved/SLA/thời gian dùng kỳ tương ứng; còn mở/quá hạn là hiện tại, gồm ticket cũ trong phạm vi. Các ô số liệu đều mở danh sách mẫu.
-- **Workflow trên Dashboard:** số lượt đang chạy (gồm chờ), chờ WO hoàn thành, thất bại và chờ trên 24 giờ. Nhóm có thể trùng nhau. 24 giờ là ngưỡng minh họa, không phải SLA; lượt thất bại chưa phản ánh đã khắc phục lỗi hay chưa.
-- **Workflow trên Báo cáo:** biểu đồ cột chồng các lượt kết thúc thành công/thất bại/hủy theo ngày; Top workflow có nhiều lượt thất bại; bảng hiệu quả từng workflow. Khoảng dài gộp ngày để giữ tối đa 14 cột và vẫn bao phủ toàn kỳ.
-- Tỷ lệ thành công workflow = thành công / (thành công + thất bại), theo **thời điểm kết thúc trong kỳ**; loại hủy và lượt chưa kết thúc. Thời gian trung bình dùng lượt thành công kết thúc trong kỳ, tính cả thời gian chờ. Lượt bắt đầu và WO được tạo dùng mốc tạo tương ứng; số WO được loại trùng theo ID.
-- Lọc Location/loại ticket cũng áp dụng Workflow; lượt không có loại ticket không xuất hiện khi lọc một loại cụ thể. Bấm cột biểu đồ, thanh lỗi hoặc ô số liệu mở modal đúng tập lượt chạy; bấm số WO mở danh sách WO được tạo.
-- **Modal Workflow:** tìm mã run/ticket/WO, lọc workflow/trạng thái, phân trang, xuất CSV đúng kết quả lọc; mở từng lượt để xem bước hiện tại, lỗi và ticket/WO liên quan. Mở WO bằng drawer, đóng quay lại modal giữ bộ lọc. Dữ liệu lượt chạy là demo, chưa kết nối hoặc điều khiển workflow backend.
-- **Modal danh sách:** tìm kiếm, lọc trạng thái/ưu tiên/nhân viên, phân trang và xuất CSV UTF-8 cho toàn bộ kết quả đang lọc. WO mở drawer chi tiết; đóng drawer giữ lại modal và bộ lọc.
-- **MPA:** một trang cá nhân (`#mpa`), giữ tối đa 4 WO cần làm ở trước kết quả cá nhân. Chỉ WO đang mở, ưu tiên quá hạn/sắp đến hạn/khẩn cấp. Không có tab hay danh sách toàn bộ Công việc của tôi.
-- SLA chính là SLA xử lý. WO tính từ **lần Start đầu tiên → Completed**, gồm thời gian tạm dừng; chưa Start thì chưa có hạn xử lý. Due date độc lập. Ticket phản hồi từ Submitted → Approved; SLA xử lý từ Approved → Resolved, chưa duyệt thì chưa có hạn xử lý. WO/ticket hủy loại khỏi tỷ lệ; WO lưu trữ giữ kết quả hoàn thành.
-- **Thời gian trung bình:** tích hợp trong hai khối tổng quan Ticket Request và Work order, đều có Phản hồi TB / Xử lý TB và danh sách mẫu khi bấm. Ticket: phản hồi Submitted → Approved (ticket duyệt trong kỳ), xử lý Approved → Resolved (ticket Resolved trong kỳ). WO: phản hồi Created → Start đầu tiên (WO bắt đầu trong kỳ), xử lý Start đầu tiên → Completed (WO hoàn thành trong kỳ). Loại trường hợp hủy, thiếu mốc hoặc thời gian ngược; không có mẫu thì hiện “—”. CSV và modal có đủ mốc cùng thời gian từng record.
-- **Bảng staff và MPA:** giữ cả Phản hồi TB và Xử lý TB. Trong dữ liệu demo, phản hồi gắn với staff Start đầu tiên; xử lý/SLA gắn với người được giao lúc hoàn thành. Đây là thời gian/SLA của WO, chưa mô phỏng thời gian riêng từng lượt phân công hay chia thời gian giữa nhiều staff.
-- Dữ liệu minh họa, không kết nối backend. Mốc demo: **22/10/2026, 10:30** (giờ Việt Nam). Tải lại trang reset thao tác thử.
+- **PMS Dashboard (`#dashboard`):** three blocks for Ticket requests, Work orders and Workflow. Each block has one Open/Active total; tickets and WOs have a clickable status row followed by overdue/due-soon signals, plus ticket readiness to resolve. Select a total, status or signal to open its list.
+- **PMS Reports (`#reports`):** volume, resolution SLA, average response/resolution times, ticket types, locations, workflow results and staff performance. Metrics and chart points open their exact record groups.
+- **MPA (`#mpa`):** personal performance and up to four priority open WOs. Overdue, due soon and urgent work appears first. Open a WO to inspect its checklist, notes, linked tickets and history, or try start/pause/resume/complete actions.
+- Dashboard and Reports have separate navigation and support browser Back/Forward. PMS location, type and period selections persist between those pages. Current backlog and priority work are independent of report dates.
+
+## Reporting periods
+
+- Default: **This month** on PMS and MPA. Select this/last week, month, quarter or year, or custom dates.
+- Weeks start on Monday; months, quarters and years follow the calendar in the demo business timezone, UTC+7. Reporting does not depend on the browser timezone.
+- Current periods stop at the demo timestamp. Compare with the same elapsed duration in the previous calendar period, capped at its end when it is shorter. Completed calendar periods compare with the full previous calendar period.
+- Custom dates include both boundary dates, stop at the demo timestamp and compare with the immediately preceding interval of equal elapsed length.
+- Charts show daily buckets for weeks/months, calendar-week buckets for quarters and calendar-month buckets for years. Custom ranges use daily buckets up to 31 days, weekly up to 120 days, and monthly thereafter. Partial first/last buckets are clipped to the exact report range.
+- Created volume uses creation dates; completed volume and resolution SLA use completion dates. Records created before the period are included when completed in it. Empty baselines show no percentage change; empty result sets show a dash rather than zero SLA.
+
+## Metrics and interactions
+
+- Each Ticket/WO overview shows created volume, resolved/completed volume, resolution SLA, average response and average resolution once. The SLA donut is green over light gray, with the rate in its center and clickable on-time/late counts.
+- Ticket response: Submitted → Approved, using tickets approved in the period. Ticket resolution: Approved → Resolved, using tickets resolved in the period. The resolution SLA starts at approval.
+- WO response: Created → First start, using WOs first started in the period. WO resolution: First start → Completed, using WOs completed in the period. Pauses count; the due date is independent of SLA.
+- Cancelled records and missing/negative durations are excluded from performance metrics. Archived WOs keep their completion outcomes. CSV exports include timestamps, durations in minutes and SLA outcomes.
+- Ticket type rankings switch between most reported (creation date, including later cancellations) and most resolved (resolution date). Location rankings use created requests. Ranking items open the matching ticket list. The expandable type table includes current open/overdue backlog and period outcomes.
+- Staff response belongs to the first technician to start. Resolution and SLA belong to the assignee at completion. The demo does not split durations by reassignment.
+- Detail tables for ticket types, workflows and staff start collapsed. List modals support search, filters, pagination and CSV export of all filtered rows. Closing a WO drawer returns to the underlying list.
+
+## Workflows
+
+- Dashboard shows the Active total once, then Failed and Waiting over 24 hours. Filter the Active list to inspect runs waiting for approval or WOs. Groups may overlap. The 24-hour threshold is illustrative, not an SLA.
+- Reports show completion outcomes over time, workflows with the most failures and an expandable per-workflow table. Workflow charts use the same calendar buckets as ticket charts.
+- Success rate = succeeded ÷ (succeeded + failed) for runs completed in the period; cancelled and unfinished runs are excluded. Average successful duration includes waiting time. Runs started and WOs created use their own dates.
+- Location and ticket-type filters apply to workflows. A run without a ticket type is excluded when filtering a specific type. Run details show the current step, error and linked records. The prototype does not operate backend workflows.
 
 ## GitHub Pages
 
-`base: './'` hỗ trợ repo path trên GitHub Pages. Điều hướng dùng React state, không cần cấu hình SPA fallback.
+`base: './'` supports repository paths on GitHub Pages. Hash navigation requires no SPA fallback.
 
-1. Đẩy project này vào repository GitHub riêng với nhánh `main`.
+1. Push the project to its GitHub repository.
 2. Settings → Pages → Source: **GitHub Actions**.
-3. Workflow `Deploy dashboard to GitHub Pages` build và deploy thư mục `dist`.
+3. The existing deployment workflow builds and publishes `dist`.
 
 ```sh
 pnpm build
 pnpm preview
 ```
 
-Chưa tạo repository hoặc publish từ prototype này.
+Status labels follow the Operations backend enums: tickets use Submitted, Approved, In progress, Resolved and Cancelled; WOs use To do, In progress, Paused, Completed and Closed. Status codes remain unchanged.

@@ -1,7 +1,7 @@
 import { NOW, durationStats, slaStats } from './data.js'
 
 const inPeriod = (at, from, to) => Number.isFinite(at) && at >= from && at <= to
-const byCount = (a, b) => b.items.length - a.items.length || a.label.localeCompare(b.label, 'vi')
+const byCount = (a, b) => b.items.length - a.items.length || a.label.localeCompare(b.label, 'en')
 function grouped(items, identity, label) {
   const groups = new Map()
   for (const item of items) {
@@ -12,17 +12,17 @@ function grouped(items, identity, label) {
   }
   return [...groups.values()].sort(byCount)
 }
-export function ticketInsights(tickets, from, to) {
+export function ticketInsights(tickets, from, to, comparison) {
   const created = tickets.filter(ticket => inPeriod(ticket.createdAt, from, to))
   const resolved = durationStats(tickets, 'ticket', from, to).resolves
   const periodLength = Number.isFinite(from) && Number.isFinite(to) && from <= to ? to - from + 1 : NaN
-  const previousFrom = from - periodLength
-  const previousTo = from - 1
+  const previousFrom = comparison?.previousFrom ?? from - periodLength
+  const previousTo = comparison?.previousTo ?? from - 1
   const previous = tickets.filter(ticket => inPeriod(ticket.createdAt, previousFrom, previousTo))
-  const typeKey = ticket => ticket.type || 'Không rõ loại'
+  const typeKey = ticket => ticket.type || 'Unknown type'
   const occurrenceByType = grouped(created, typeKey, typeKey)
   const resolutionByType = grouped(resolved, typeKey, typeKey)
-  const locationRanking = grouped(created, ticket => ticket.location || 'Chưa xác định Location', ticket => ticket.location || 'Chưa xác định Location')
+  const locationRanking = grouped(created, ticket => ticket.location || 'Unknown location', ticket => ticket.location || 'Unknown location')
   const performance = grouped(tickets, typeKey, typeKey).map(group => {
     const times = durationStats(group.items, 'ticket', from, to)
     const createdItems = group.items.filter(ticket => inPeriod(ticket.createdAt, from, to))

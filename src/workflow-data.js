@@ -1,19 +1,20 @@
-import { DAY, HOUR, NOW, TYPES, isOpen } from './data.js'
+import { HOUR, NOW, TYPES, isOpen } from './data.js'
+import { timeBuckets } from './report-period.js'
 
 export const WORKFLOW_STATUS = {
-  RUNNING: { label: 'Đang chạy', tone: 'blue' },
-  WAITING_APPROVAL: { label: 'Chờ duyệt ticket', tone: 'amber' },
-  WAITING_WORK_ORDER: { label: 'Chờ WO hoàn thành', tone: 'amber' },
-  SUCCEEDED: { label: 'Thành công', tone: 'green' },
-  FAILED: { label: 'Thất bại', tone: 'red' },
-  CANCELLED: { label: 'Đã hủy', tone: 'neutral' },
+  RUNNING: { label: 'Running', tone: 'blue' },
+  WAITING_APPROVAL: { label: 'Waiting for ticket approval', tone: 'amber' },
+  WAITING_WORK_ORDER: { label: 'Waiting for WO completion', tone: 'amber' },
+  SUCCEEDED: { label: 'Succeeded', tone: 'green' },
+  FAILED: { label: 'Failed', tone: 'red' },
+  CANCELLED: { label: 'Cancelled', tone: 'neutral' },
 }
 export const WORKFLOWS = [
-  { id: 'wf-ac', name: 'Xử lý yêu cầu điều hòa', code: 'WF-001' },
-  { id: 'wf-electric', name: 'Xử lý sự cố điện', code: 'WF-002' },
-  { id: 'wf-water', name: 'Xử lý sự cố nước', code: 'WF-003' },
-  { id: 'wf-light', name: 'Xử lý yêu cầu chiếu sáng', code: 'WF-004' },
-  { id: 'wf-maintenance', name: 'Bảo trì & kiểm tra định kỳ', code: 'WF-005' },
+  { id: 'wf-ac', name: 'Air conditioning requests', code: 'WF-001' },
+  { id: 'wf-electric', name: 'Electrical requests', code: 'WF-002' },
+  { id: 'wf-water', name: 'Plumbing requests', code: 'WF-003' },
+  { id: 'wf-light', name: 'Lighting requests', code: 'WF-004' },
+  { id: 'wf-maintenance', name: 'Scheduled maintenance & inspections', code: 'WF-005' },
 ]
 export const WAIT_WARNING = 24 * HOUR
 export const isActiveRun = run => ['RUNNING', 'WAITING_APPROVAL', 'WAITING_WORK_ORDER'].includes(run.status)
@@ -36,8 +37,8 @@ export function initialWorkflowRuns(works, tickets) {
       workflowId: definition.id, workflowName: definition.name,
       location: work.location, ticketType: type || null, status, startedAt, finishedAt, waitingSince,
       ticketIds: linkedTickets.map(ticket => ticket.id), workOrderIds: [work.id],
-      currentStep: status === 'WAITING_WORK_ORDER' ? 'Chờ nhân viên hoàn thành WO' : status === 'FAILED' ? 'Gửi thông báo kết quả' : status === 'SUCCEEDED' ? 'Đã hoàn tất các bước' : 'Dừng theo yêu cầu hủy',
-      error: failed ? 'Không gửi được thông báo kết quả. Cần kiểm tra kết nối dịch vụ thông báo.' : null,
+      currentStep: status === 'WAITING_WORK_ORDER' ? 'Waiting for the technician to complete the WO' : status === 'FAILED' ? 'Send outcome notification' : status === 'SUCCEEDED' ? 'All steps completed' : 'Stopped following cancellation',
+      error: failed ? 'Could not send the outcome notification. Check the notification service connection.' : null,
     }
   })
   // Runs without WO illustrate waiting for approval and processing before task creation.
@@ -51,7 +52,7 @@ export function initialWorkflowRuns(works, tickets) {
       startedAt: ticket.createdAt, finishedAt: status === 'SUCCEEDED' ? ticket.resolvedAt : status === 'CANCELLED' ? ticket.cancelledAt : null,
       waitingSince: status === 'WAITING_APPROVAL' ? ticket.createdAt : null,
       ticketIds: [ticket.id], workOrderIds: [],
-      currentStep: status === 'WAITING_APPROVAL' ? 'Chờ PMS duyệt ticket' : status === 'RUNNING' ? 'Kiểm tra thông tin & điều phối' : status === 'SUCCEEDED' ? 'Đã hoàn tất các bước' : 'Dừng theo yêu cầu hủy',
+      currentStep: status === 'WAITING_APPROVAL' ? 'Waiting for PMS ticket approval' : status === 'RUNNING' ? 'Validate details & coordinate work' : status === 'SUCCEEDED' ? 'All steps completed' : 'Stopped following cancellation',
       error: null,
     }
   })
@@ -74,14 +75,9 @@ export function workflowStats(runs, works, from, to) {
   }
 }
 
-export function workflowBuckets(runs, from, to) {
-  if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) return []
-  const days = Math.max(1, Math.ceil((to - from + 1) / DAY))
-  const bucketDays = Math.max(1, Math.ceil(days / 14))
-  return Array.from({ length: Math.ceil(days / bucketDays) }, (_, index) => {
-    const start = from + index * bucketDays * DAY
-    const end = Math.min(to, start + bucketDays * DAY - 1)
-    const ended = runs.filter(run => inPeriod(run.finishedAt, start, end))
-    return { start, end, succeeded: ended.filter(run => run.status === 'SUCCEEDED'), failed: ended.filter(run => run.status === 'FAILED'), cancelled: ended.filter(run => run.status === 'CANCELLED') }
+export function workflowBuckets(runs, from, to, granularity = 'day') {
+  return timeBuckets(from, to, granularity).map(bucket => {
+    const ended = runs.filter(run => inPeriod(run.finishedAt, bucket.start, bucket.end))
+    return { ...bucket, succeeded: ended.filter(run => run.status === 'SUCCEEDED'), failed: ended.filter(run => run.status === 'FAILED'), cancelled: ended.filter(run => run.status === 'CANCELLED') }
   })
 }
