@@ -1,0 +1,90 @@
+import React, { useState } from 'react'
+import { Activity, ArrowDownToLine, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleHelp, Clock3, FileText, GitBranch, MapPin, Search, Wrench, X } from 'lucide-react'
+import { NOW, STATUS, TICKET_STATUS, dateText, dayText, duration } from './data.js'
+import { WORKFLOWS, WORKFLOW_STATUS, isActiveRun, isLongWaitingRun, workflowBuckets, workflowStats } from './workflow-data.js'
+
+const pct = value => value == null ? '—' : `${value}%`
+function RunBadge({ status }) {
+  const item = WORKFLOW_STATUS[status]
+  return <span className={`badge ${item.tone}`}><i />{item.label}</span>
+}
+function WorkflowSelect({ label, value, onChange, children }) {
+  return <label className="select"><span className="sr-only">{label}</span><select aria-label={label} value={value} onChange={event => onChange(event.target.value)}>{children}</select><ChevronDown size={14} /></label>
+}
+
+export function WorkflowSection({ runs, works, report, from, to, scopeLabel, rangeLabel, onList }) {
+  const stats = workflowStats(runs, works, from, to)
+  const active = runs.filter(isActiveRun)
+  const waiting = runs.filter(run => run.status === 'WAITING_WORK_ORDER')
+  const failed = runs.filter(run => run.status === 'FAILED')
+  const longWaiting = runs.filter(isLongWaitingRun)
+  const list = (title, items, context = report ? rangeLabel : 'Hiện tại · 22/10/2026, 10:30') => onList({ title, kind: 'workflow', ids: items.map(run => run.id), subtitle: `${scopeLabel} · ${context}` })
+  const byDefinition = WORKFLOWS.map(definition => {
+    const items = runs.filter(run => run.workflowId === definition.id)
+    return { ...definition, items, ...workflowStats(items, works, from, to) }
+  })
+  if (!report) return <section className="workflow-section workflow-current" aria-label="Workflow cần theo dõi">
+    <div className="section-caption"><span><GitBranch size={14} />WORKFLOW</span><small>Hiện tại · Độc lập với SLA của WO</small></div>
+    <div className="workflow-monitor-grid">{[
+      { label: 'Workflow đang chạy', items: active, icon: Activity, tone: 'blue', hint: 'Gồm các lượt đang chờ' },
+      { label: 'Chờ WO hoàn thành', items: waiting, icon: Wrench, tone: 'amber', hint: 'Chờ công việc liên quan' },
+      { label: 'Lượt chạy thất bại', items: failed, icon: CircleAlert, tone: 'red', hint: 'Xem lỗi tại bước xử lý' },
+      { label: 'Lượt chạy chờ trên 24 giờ', items: longWaiting, icon: Clock3, tone: 'violet', hint: 'Ngưỡng minh họa · gồm chờ duyệt / chờ WO' },
+    ].map(item => <button key={item.label} className="monitor-row" onClick={() => list(item.label, item.items)}><span className={`monitor-icon ${item.tone}`}><item.icon size={16} /></span><span className="monitor-label">{item.label}<small>{item.hint}</small></span><strong>{item.items.length}</strong><ChevronRight size={15} /></button>)}</div>
+    <p className="monitor-hint"><CircleHelp size={13} />Các nhóm có thể trùng lượt chạy. Thất bại là kết quả chạy, chưa thể hiện lỗi đã được xử lý hay chưa.</p>
+  </section>
+  const buckets = workflowBuckets(runs, from, to)
+  const maxCount = Math.max(1, ...buckets.map(bucket => bucket.succeeded.length + bucket.failed.length + bucket.cancelled.length))
+  const failureRanking = byDefinition.filter(item => item.failed.length).sort((a, b) => b.failed.length - a.failed.length).slice(0, 5)
+  const maxFailures = Math.max(1, ...failureRanking.map(item => item.failed.length))
+  return <section className="workflow-section workflow-report" aria-label="Báo cáo workflow">
+    <div className="section-caption"><span><GitBranch size={14} />HIỆU QUẢ WORKFLOW</span><small>{rangeLabel}</small></div>
+    <div className="workflow-summary-grid">
+      <button className="card workflow-summary" onClick={() => list('Workflow bắt đầu trong kỳ', stats.started)}><span className="monitor-icon blue"><GitBranch size={17} /></span><span>Lượt bắt đầu trong kỳ</span><strong>{stats.started.length}</strong><small>Theo thời điểm bắt đầu</small></button>
+      <button className="card workflow-summary" onClick={() => list('Kết quả workflow được đánh giá', [...stats.succeeded, ...stats.failed])}><span className="monitor-icon green"><CheckCheck size={17} /></span><span>Tỷ lệ thành công</span><strong className="text-green">{pct(stats.successRate)}</strong><small>{stats.succeeded.length} thành công / {stats.succeeded.length + stats.failed.length} được đánh giá</small></button>
+      <button className="card workflow-summary" onClick={() => list('Workflow thất bại trong kỳ', stats.failed)}><span className="monitor-icon red"><CircleAlert size={17} /></span><span>Lượt thất bại trong kỳ</span><strong className="text-red">{stats.failed.length}</strong><small>Theo thời điểm kết thúc</small></button>
+      <button className="card workflow-summary" onClick={() => list('Thời gian workflow thành công', stats.succeeded)}><span className="monitor-icon violet"><Clock3 size={17} /></span><span>Thời gian chạy trung bình</span><strong className="workflow-duration">{stats.averageDuration == null ? '—' : duration(stats.averageDuration)}</strong><small>{stats.succeeded.length} lượt thành công trong kỳ</small></button>
+    </div>
+    <div className="workflow-charts-grid">
+      <section className="card workflow-run-chart"><div className="section-heading"><div><h2>Kết quả lượt chạy theo ngày</h2><p>Theo thời điểm kết thúc · Bấm cột để xem danh sách</p></div><Activity size={17} className="muted" /></div>
+        {stats.ended.length ? <div className="workflow-column-chart" role="group" aria-label="Biểu đồ kết quả workflow"><div className="workflow-chart-scale"><span>{maxCount}</span><span>{Math.round(maxCount / 2)}</span><span>0</span></div><div className="workflow-chart-columns">{buckets.map(bucket => <div className="workflow-chart-column" key={bucket.start}><div className="workflow-bar-stack">{[['succeeded', 'Thành công', 'green'], ['failed', 'Thất bại', 'red'], ['cancelled', 'Đã hủy', 'neutral']].map(([key, label, tone]) => bucket[key].length > 0 && <button key={key} className={`workflow-chart-segment ${tone}`} style={{ height: `${bucket[key].length / maxCount * 100}%` }} aria-label={`${dayText(bucket.start)}: ${bucket[key].length} lượt ${label.toLowerCase()}`} title={`${dayText(bucket.start)} – ${dayText(bucket.end)}: ${bucket[key].length} ${label.toLowerCase()}`} onClick={() => list(`Workflow ${label.toLowerCase()} theo ngày`, bucket[key], `${dayText(bucket.start)} – ${dayText(bucket.end)}/2026`)}>{buckets.length <= 7 && bucket[key].length}</button>)}</div><span>{dayText(bucket.start)}</span></div>)}</div></div> : <div className="workflow-empty-chart"><GitBranch size={28} /><b>Chưa có lượt chạy kết thúc trong kỳ</b><span>Thử chọn khoảng thời gian khác.</span></div>}
+        <div className="chart-legend workflow-chart-legend">{[['Thành công', stats.succeeded, 'green'], ['Thất bại', stats.failed, 'red'], ['Đã hủy', stats.cancelled, 'neutral']].map(([label, items, tone]) => <button key={label} onClick={() => list(`Workflow ${label.toLowerCase()} trong kỳ`, items)}><i className={tone} />{label}<b>{items.length}</b></button>)}</div>
+      </section>
+      <section className="card workflow-failure-chart"><div className="section-heading"><div><h2>Workflow gặp lỗi nhiều nhất</h2><p>Số lượt thất bại kết thúc trong kỳ</p></div><CircleAlert size={17} className="text-red" /></div><div className="workflow-failure-bars">{failureRanking.length ? failureRanking.map(item => <button key={item.id} onClick={() => list(`Lượt thất bại · ${item.name}`, item.failed)}><span>{item.name}<b>{item.failed.length}</b></span><i><span style={{ width: `${item.failed.length / maxFailures * 100}%` }} /></i></button>) : <div className="workflow-empty-chart"><CheckCheck size={26} /><b>Không có lượt chạy thất bại</b><span>Trong khoảng thời gian đang chọn.</span></div>}</div></section>
+    </div>
+    <section className="card workflow-performance-table"><div className="section-heading"><div><h2>Hiệu quả từng workflow</h2><p>Bấm số liệu để xem các lượt chạy tương ứng.</p></div><span className="count-pill">{byDefinition.filter(item => item.items.length).length} workflow có dữ liệu</span></div><div className="table-scroll"><table><thead><tr><th>WORKFLOW</th><th>LƯỢT BẮT ĐẦU</th><th>THÀNH CÔNG</th><th>THẤT BẠI</th><th>ĐÃ HỦY</th><th>TỶ LỆ THÀNH CÔNG</th><th>THỜI GIAN CHẠY TB</th><th>WO TẠO TRONG KỲ</th></tr></thead><tbody>{byDefinition.map(item => <tr key={item.id}><td><b>{item.name}</b><small className="block muted">{item.code}</small></td>{[['started', 'Lượt bắt đầu'], ['succeeded', 'Thành công'], ['failed', 'Thất bại'], ['cancelled', 'Đã hủy']].map(([key, label]) => <td key={key}><button className={`metric-link ${key === 'failed' ? 'text-red' : ''}`} onClick={() => list(`${label} · ${item.name}`, item[key])}>{item[key].length}</button></td>)}<td><button className="metric-link text-green" onClick={() => list(`Kết quả đánh giá · ${item.name}`, [...item.succeeded, ...item.failed])}>{pct(item.successRate)}</button></td><td><button className="workflow-time-link" onClick={() => list(`Thời gian chạy · ${item.name}`, item.succeeded)}>{item.averageDuration == null ? '—' : duration(item.averageDuration)}</button></td><td><button className="metric-link" onClick={() => onList({ title: `WO tạo trong kỳ · ${item.name}`, kind: 'work', ids: item.createdWorks.map(work => work.id), subtitle: `${scopeLabel} · ${rangeLabel}` })}>{item.createdWorks.length}</button></td></tr>)}</tbody></table></div><div className="workflow-definition-note"><CircleHelp size={14} /><p>Tỷ lệ thành công = thành công ÷ (thành công + thất bại), theo các lượt kết thúc trong kỳ; loại hủy. Thời gian trung bình tính từ đầu đến cuối các lượt thành công, gồm thời gian chờ. Lượt bắt đầu và WO tạo mới dùng mốc tạo riêng, nên không nhất thiết bằng tổng kết quả trong kỳ.</p></div></section>
+  </section>
+}
+
+export function WorkflowRunList({ listing, runs, works, tickets, onSelectWork, notify }) {
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('all')
+  const [definition, setDefinition] = useState('all')
+  const [page, setPage] = useState(1)
+  const [expanded, setExpanded] = useState(null)
+  const ids = new Set(listing.ids)
+  const base = runs.filter(run => ids.has(run.id))
+  const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replaceAll('đ', 'd').replaceAll('Đ', 'D').toLowerCase()
+  const matching = base.filter(run => (status === 'all' || run.status === status) && (definition === 'all' || run.workflowId === definition) && normalize([run.code, run.workflowName, run.location, run.currentStep, ...run.ticketIds.map(id => tickets.find(ticket => ticket.id === id)?.code || ''), ...run.workOrderIds.map(id => works.find(work => work.id === id)?.code || '')].join(' ')).includes(normalize(search)))
+  const pages = Math.max(1, Math.ceil(matching.length / 8))
+  const current = Math.min(page, pages)
+  const shown = matching.slice((current - 1) * 8, current * 8)
+  const changeFilter = setter => value => { setter(value); setPage(1); setExpanded(null) }
+  const exportCsv = () => {
+    const rows = [['Mã lượt chạy', 'Workflow', 'Location', 'Trạng thái', 'Bước hiện tại', 'Bắt đầu', 'Kết thúc', 'Chờ từ', 'Thời gian chạy (phút)', 'Ticket', 'WO', 'Lỗi'], ...matching.map(run => [run.code, run.workflowName, run.location, WORKFLOW_STATUS[run.status].label, run.currentStep, dateText(run.startedAt), dateText(run.finishedAt), dateText(run.waitingSince), ((run.finishedAt ?? NOW) - run.startedAt) / 60_000, run.ticketIds.map(id => tickets.find(ticket => ticket.id === id)?.code).filter(Boolean).join('; '), run.workOrderIds.map(id => works.find(work => work.id === id)?.code).filter(Boolean).join('; '), run.error || ''])]
+    const csv = '\uFEFF' + rows.map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\r\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+    const link = document.createElement('a'); link.href = url; link.download = 'smartos-workflow-runs.csv'; link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+    notify(`Đã xuất ${matching.length} lượt chạy đang lọc`)
+  }
+  return <><div className="report-toolbar"><label className="search-input"><Search size={15} /><input aria-label="Tìm lượt chạy" placeholder="Tìm mã run, workflow, ticket, WO..." value={search} onChange={event => changeFilter(setSearch)(event.target.value)} />{search && <button aria-label="Xóa tìm lượt chạy" onClick={() => changeFilter(setSearch)('')}><X size={13} /></button>}</label><WorkflowSelect label="Trạng thái workflow" value={status} onChange={changeFilter(setStatus)}><option value="all">Tất cả trạng thái</option>{Object.entries(WORKFLOW_STATUS).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}</WorkflowSelect><WorkflowSelect label="Tên workflow" value={definition} onChange={changeFilter(setDefinition)}><option value="all">Tất cả workflow</option>{WORKFLOWS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</WorkflowSelect><button className="button secondary" disabled={!matching.length} onClick={exportCsv}><ArrowDownToLine size={16} />Xuất CSV ({matching.length})</button></div><div className="report-result-count"><b>{matching.length}</b> / {base.length} lượt chạy{(search || status !== 'all' || definition !== 'all') && <button onClick={() => { setSearch(''); setStatus('all'); setDefinition('all'); setPage(1); setExpanded(null) }}>Xóa bộ lọc</button>}<span>Xuất toàn bộ kết quả đang lọc, gồm các trang</span></div>
+    {shown.length ? <div className="table-scroll"><table className="workflow-runs-table"><thead><tr><th>LƯỢT CHẠY / WORKFLOW</th><th>LOCATION</th><th>TRẠNG THÁI / BƯỚC</th><th>BẮT ĐẦU / KẾT THÚC</th><th>THỜI GIAN</th><th>LIÊN QUAN</th><th /></tr></thead><tbody>{shown.map(run => <React.Fragment key={run.id}><tr className="workflow-run-row" onClick={() => setExpanded(expanded === run.id ? null : run.id)}><td><button className="code table-link" aria-expanded={expanded === run.id} onClick={event => { event.stopPropagation(); setExpanded(expanded === run.id ? null : run.id) }}>{run.code}</button><b className="block">{run.workflowName}</b></td><td>{run.location}</td><td><RunBadge status={run.status} /><small className="block muted">{run.currentStep}</small></td><td><span>{dateText(run.startedAt)}</span><small className="block muted">{run.finishedAt ? dateText(run.finishedAt) : 'Chưa kết thúc'}</small></td><td><span>{duration((run.finishedAt ?? NOW) - run.startedAt)}</span>{isLongWaitingRun(run) && <small className="block text-amber">Chờ {duration(NOW - run.waitingSince)}</small>}</td><td><span>{run.ticketIds.length} ticket · {run.workOrderIds.length} WO</span></td><td><ChevronDown size={14} className={expanded === run.id ? 'rotated' : ''} /></td></tr>{expanded === run.id && <tr className="workflow-expanded-row"><td colSpan={7}><RunDetails run={run} works={works} tickets={tickets} onSelectWork={onSelectWork} /></td></tr>}</React.Fragment>)}</tbody></table></div> : <div className="workflow-empty-chart"><Search size={26} /><b>Không có lượt chạy phù hợp</b><span>Thử thay đổi bộ lọc hoặc khoảng thời gian.</span></div>}
+    <div className="report-milestone-note"><CircleHelp size={14} />Bấm mã lượt chạy để xem bước hiện tại và ticket/WO liên quan. Thời gian chờ workflow không phải SLA WO.</div><div className="table-footer"><span>{matching.length ? `${(current - 1) * 8 + 1}–${Math.min(current * 8, matching.length)}` : 0} / {matching.length} lượt chạy</span><div className="pagination"><button className="icon-button" aria-label="Trang run trước" disabled={current === 1} onClick={() => { setPage(current - 1); setExpanded(null) }}><ChevronLeft size={16} /></button><span>{current} / {pages}</span><button className="icon-button" aria-label="Trang run sau" disabled={current === pages} onClick={() => { setPage(current + 1); setExpanded(null) }}><ChevronRight size={16} /></button></div></div></>
+}
+
+function RunDetails({ run, works, tickets, onSelectWork }) {
+  const linkedTickets = tickets.filter(ticket => run.ticketIds.includes(ticket.id))
+  const linkedWorks = works.filter(work => run.workOrderIds.includes(work.id))
+  return <div className="workflow-run-details"><div className="workflow-step-summary"><GitBranch size={18} /><div><b>{run.currentStep}</b><p>{run.waitingSince ? `Chờ từ ${dateText(run.waitingSince)} · Đã chờ ${duration(NOW - run.waitingSince)}` : run.status === 'SUCCEEDED' ? 'Các bước đã kết thúc thành công.' : run.status === 'CANCELLED' ? 'Lượt chạy đã dừng; không tính vào tỷ lệ thành công.' : run.status === 'FAILED' ? 'Lượt chạy đã kết thúc tại bước gặp lỗi.' : 'Lượt chạy chưa kết thúc.'}</p></div></div>{run.error && <div className="workflow-error-message"><CircleAlert size={17} /><span>{run.error}</span></div>}<div className="workflow-linked-grid"><section><h3><FileText size={14} />Ticket liên quan ({linkedTickets.length})</h3>{linkedTickets.length ? linkedTickets.map(ticket => <article key={ticket.id} className="workflow-linked-record"><div><b className="code">{ticket.code}</b><span className={`badge ${TICKET_STATUS[ticket.status].tone}`}>{TICKET_STATUS[ticket.status].label}</span></div><strong>{ticket.type}</strong><p>{ticket.note}</p><small><MapPin size={11} />{ticket.location} · {ticket.area}</small></article>) : <p className="workflow-no-related">Lượt chạy không gắn ticket.</p>}</section><section><h3><Wrench size={14} />WO tạo bởi lượt chạy ({linkedWorks.length})</h3>{linkedWorks.length ? linkedWorks.map(work => <button key={work.id} className="workflow-linked-record workflow-linked-work" onClick={() => onSelectWork(work.id)}><div><b className="code">{work.code}</b><span className={`badge ${STATUS[work.status].tone}`}>{STATUS[work.status].label}</span></div><strong>{work.title}</strong><small><MapPin size={11} />{work.location} · {work.area}</small><span className="workflow-open-work">Xem chi tiết WO<ChevronRight size={13} /></span></button>) : <p className="workflow-no-related">Chưa có WO được tạo bởi lượt chạy này.</p>}</section></div></div>
+}

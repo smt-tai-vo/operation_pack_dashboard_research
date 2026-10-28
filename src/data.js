@@ -43,7 +43,7 @@ export function initialData() {
     return {
       id: `t${i}`, code: `TIC-${String(4289 - i).padStart(6, '0')}`, type: TYPES[i % 5],
       location: LOCATIONS[Math.floor(i / 2) % 3], area: `Tầng ${i % 5 + 1} · ${['Phòng họp Lotus', 'Pantry', 'Khu làm việc', 'Lễ tân'][i % 4]}`,
-      status, createdAt, respondedAt, resolvedAt, responseDueAt: createdAt + 2 * HOUR, resolveDueAt: createdAt + 24 * HOUR,
+      status, createdAt, respondedAt, resolvedAt, cancelledAt: status === 'CANCELLED' ? Math.min(NOW, createdAt + 4 * HOUR) : null, responseDueAt: createdAt + 2 * HOUR, resolveDueAt: createdAt + (i === 0 ? 6 : 24) * HOUR,
       priority: ['HIGH', 'MEDIUM', 'URGENT', 'LOW'][i % 4],
       note: ['Máy lạnh có tiếng ồn và làm mát yếu. Vui lòng kiểm tra giúp.', 'Ổ cắm tại khu vực làm việc chập chờn.', 'Nước bị rò tại khớp nối dưới bồn rửa.', 'Đèn nhấp nháy, cần kiểm tra và thay thế.'][i % 4],
       ready: status === 'IN_PROGRESS' && i % 2 === 0,
@@ -55,12 +55,12 @@ export function initialData() {
     const assignedAt = NOW - (Math.floor(i / 4) * 2 + i % 2) * DAY - (2 + i % 3) * HOUR
     const createdAt = assignedAt - HOUR
     const responseHours = i % 3 === 0 ? 1 : 2
-    const resolveHours = i === 0 ? 6 : i % 3 === 0 ? 12 : 24
+    const resolveHours = i === 0 ? 3 : i === 2 ? 6 : i % 3 === 0 ? 12 : 24
     const startedAt = status === 'TO_DO' ? null : Math.min(NOW - HOUR / 2, assignedAt + responseHours * (i % 3 === 0 ? 1.4 : 0.45) * HOUR)
     const closeReason = status === 'CLOSED' ? (i % 3 === 0 ? 'CANCELLED' : i % 3 === 1 ? 'TICKET_CANCELLED' : 'ARCHIVED') : null
     const cancelled = ['CANCELLED', 'TICKET_CANCELLED'].includes(closeReason)
     const finished = status === 'COMPLETED' || closeReason === 'ARCHIVED'
-    const completedAt = finished ? Math.min(NOW - HOUR / 3, assignedAt + resolveHours * (i % 3 === 0 ? 1.3 : 0.65) * HOUR) : null
+    const completedAt = finished ? Math.min(NOW - HOUR / 3, startedAt + resolveHours * (i % 3 === 0 ? 1.3 : 0.65) * HOUR) : null
     const checklist = i % 7 === 6 ? [] : checklistText.slice(0, 3 + i % 3).map((text, j) => ({ id: `${i}-${j}`, text, checked: finished || (status !== 'TO_DO' && j < i % 3 + 1) }))
     const candidates = tickets.filter(t => t.location === LOCATIONS[i % 3] && t.createdAt <= createdAt && (cancelled ? false : finished ? ['IN_PROGRESS', 'RESOLVED'].includes(t.status) : ['APPROVED', 'IN_PROGRESS'].includes(t.status)))
     const linked = i % 4 === 3 || !candidates.length ? [] : [candidates[i % candidates.length]]
@@ -69,7 +69,10 @@ export function initialData() {
       staffId: staff.id, location: LOCATIONS[i % 3], area: `Tầng ${i % 5 + 1} · ${['Phòng họp Lotus', 'Pantry', 'Hành lang Đông', 'Lễ tân'][i % 4]}`,
       status, priority: ['URGENT', 'HIGH', 'MEDIUM', 'LOW', 'HIGH'][i % 5],
       createdAt, assignedAt, startedAt, completedAt, responseHours, resolveHours,
-      responseDueAt: createdAt + responseHours * HOUR, resolveDueAt: createdAt + resolveHours * HOUR,
+      responseDueAt: createdAt + responseHours * HOUR, resolveDueAt: startedAt ? startedAt + resolveHours * HOUR : null,
+      dueDate: i % 3 === 0 ? createdAt + 3 * DAY : null,
+      closedAt: status === 'CLOSED' ? (completedAt ? completedAt + HOUR : createdAt + 5 * HOUR) : null,
+      completedByStaffId: completedAt ? staff.id : null,
       assignmentStartedAt: startedAt, assignmentCompletedAt: completedAt,
       closeReason, cancelled, checklist, ticketIds: linked.map(t => t.id),
       note: 'Kiểm tra hiện trạng, bảo đảm an toàn trước khi thực hiện. Báo quản lý nếu cần bổ sung vật tư.',
@@ -102,10 +105,10 @@ export const duration = ms => {
 export function timing(w) {
   if (w.status === 'CLOSED') return { label: w.closeReason === 'ARCHIVED' ? 'Đã lưu trữ' : 'Đã hủy', tone: 'neutral' }
   if (w.status === 'COMPLETED') return { label: 'Đã hoàn thành', tone: 'green' }
-  const response = !w.startedAt
-  const due = response ? w.responseDueAt : w.resolveDueAt
+  if (!w.startedAt) return { label: 'Chưa bắt đầu', detail: 'SLA xử lý chưa bắt đầu', tone: 'neutral', due: null }
+  const due = w.resolveDueAt
   const delta = due - NOW
-  return { label: delta < 0 ? `Quá hạn ${duration(-delta)}` : `Còn ${duration(delta)}`, detail: response ? 'Phản hồi' : 'Hoàn thành', tone: delta < 0 ? 'red' : delta < 4 * HOUR ? 'amber' : 'muted', due }
+  return { label: delta < 0 ? `Quá hạn ${duration(-delta)}` : `Còn ${duration(delta)}`, detail: 'SLA xử lý', tone: delta < 0 ? 'red' : delta < 4 * HOUR ? 'amber' : 'muted', due }
 }
 export function percentage(items, test) {
   return items.length ? Math.round(items.filter(test).length / items.length * 100) : null
@@ -123,14 +126,14 @@ export function slaStats(items, kind = 'work') {
 export function staffStats(works, staffId, from, to) {
   const all = works.filter(w => w.staffId === staffId)
   const assigned = all.filter(w => w.assignedAt >= from && w.assignedAt <= to)
-  const responses = all.filter(w => !w.cancelled && w.assignmentStartedAt >= from && w.assignmentStartedAt <= to && w.assignmentStartedAt != null)
-  const completed = all.filter(w => isFinished(w) && w.assignmentCompletedAt >= from && w.assignmentCompletedAt <= to)
+  const responses = all.filter(w => !w.cancelled && w.startedAt != null && w.startedAt >= from && w.startedAt <= to)
+  const completed = works.filter(w => w.completedByStaffId === staffId && isFinished(w) && w.completedAt >= from && w.completedAt <= to)
   return {
     open: all.filter(isOpen), assigned, completed,
-    response: percentage(responses, w => w.assignmentStartedAt <= w.assignedAt + w.responseHours * HOUR),
-    resolve: percentage(completed, w => w.assignmentCompletedAt <= w.assignedAt + w.resolveHours * HOUR),
-    responseN: responses.length, resolveN: completed.length,
-    responseTime: responses.length ? responses.reduce((n, w) => n + w.assignmentStartedAt - w.assignedAt, 0) / responses.length : null,
-    resolveTime: completed.length ? completed.reduce((n, w) => n + w.assignmentCompletedAt - w.assignedAt, 0) / completed.length : null,
+    response: null,
+    resolve: percentage(completed, w => w.completedAt <= w.resolveDueAt),
+    responseN: 0, resolveN: completed.length,
+    responseTime: responses.length ? responses.reduce((n, w) => n + w.startedAt - w.createdAt, 0) / responses.length : null,
+    resolveTime: completed.length ? completed.reduce((n, w) => n + w.completedAt - w.startedAt, 0) / completed.length : null,
   }
 }
