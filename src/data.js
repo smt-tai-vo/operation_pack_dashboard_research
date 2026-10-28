@@ -38,12 +38,15 @@ export function initialData() {
   const tickets = Array.from({ length: 36 }, (_, i) => {
     const status = ['SUBMITTED', 'IN_PROGRESS', 'RESOLVED', 'APPROVED', 'IN_PROGRESS', 'CANCELLED'][i % 6]
     const createdAt = NOW - (i % 18) * DAY - (3 + i % 5) * HOUR
-    const respondedAt = status === 'SUBMITTED' ? null : createdAt + (i % 3 === 0 ? 2.8 : 0.6) * HOUR
+    const submittedAt = createdAt
+    const approvedAt = status === 'SUBMITTED' || (status === 'CANCELLED' && i % 12 === 5) ? null : submittedAt + (i % 3 === 0 ? 2.8 : 0.6) * HOUR
+    const resolveHours = i === 1 ? 28 : 24
     const resolvedAt = status === 'RESOLVED' ? Math.min(NOW - HOUR, createdAt + (i % 4 === 0 ? 30 : 9) * HOUR) : null
     return {
       id: `t${i}`, code: `TIC-${String(4289 - i).padStart(6, '0')}`, type: TYPES[i % 5],
       location: LOCATIONS[Math.floor(i / 2) % 3], area: `Tầng ${i % 5 + 1} · ${['Phòng họp Lotus', 'Pantry', 'Khu làm việc', 'Lễ tân'][i % 4]}`,
-      status, createdAt, respondedAt, resolvedAt, cancelledAt: status === 'CANCELLED' ? Math.min(NOW, createdAt + 4 * HOUR) : null, responseDueAt: createdAt + 2 * HOUR, resolveDueAt: createdAt + (i === 0 ? 6 : 24) * HOUR,
+      status, createdAt, submittedAt, approvedAt, resolvedAt, cancelledAt: status === 'CANCELLED' ? Math.min(NOW, createdAt + 4 * HOUR) : null,
+      responseDueAt: submittedAt + 2 * HOUR, resolveDueAt: approvedAt == null ? null : approvedAt + resolveHours * HOUR,
       priority: ['HIGH', 'MEDIUM', 'URGENT', 'LOW'][i % 4],
       note: ['Máy lạnh có tiếng ồn và làm mát yếu. Vui lòng kiểm tra giúp.', 'Ổ cắm tại khu vực làm việc chập chờn.', 'Nước bị rò tại khớp nối dưới bồn rửa.', 'Đèn nhấp nháy, cần kiểm tra và thay thế.'][i % 4],
       ready: status === 'IN_PROGRESS' && i % 2 === 0,
@@ -72,6 +75,7 @@ export function initialData() {
       responseDueAt: createdAt + responseHours * HOUR, resolveDueAt: startedAt ? startedAt + resolveHours * HOUR : null,
       dueDate: i % 3 === 0 ? createdAt + 3 * DAY : null,
       closedAt: status === 'CLOSED' ? (completedAt ? completedAt + HOUR : createdAt + 5 * HOUR) : null,
+      startedByStaffId: startedAt == null ? null : staff.id,
       completedByStaffId: completedAt ? staff.id : null,
       assignmentStartedAt: startedAt, assignmentCompletedAt: completedAt,
       closeReason, cancelled, checklist, ticketIds: linked.map(t => t.id),
@@ -115,25 +119,44 @@ export function percentage(items, test) {
 }
 export function slaStats(items, kind = 'work') {
   const valid = items.filter(x => kind === 'ticket' ? x.status !== 'CANCELLED' : !x.cancelled)
-  const responses = valid.filter(x => kind === 'ticket' ? x.respondedAt : x.startedAt)
-  const resolves = valid.filter(x => kind === 'ticket' ? x.resolvedAt : x.completedAt)
+  const responses = valid.filter(x => (kind === 'ticket' ? x.approvedAt : x.startedAt) != null && x.responseDueAt != null)
+  const resolves = valid.filter(x => (kind === 'ticket' ? x.resolvedAt : x.completedAt) != null && x.resolveDueAt != null)
   return {
-    response: percentage(responses, x => (kind === 'ticket' ? x.respondedAt : x.startedAt) <= x.responseDueAt),
+    response: percentage(responses, x => (kind === 'ticket' ? x.approvedAt : x.startedAt) <= x.responseDueAt),
     resolve: percentage(resolves, x => (kind === 'ticket' ? x.resolvedAt : x.completedAt) <= x.resolveDueAt),
     responseN: responses.length, resolveN: resolves.length,
+  }
+}
+// Durations are milliseconds; each average uses its own milestone cohort.
+export function durationBetween(start, end) {
+  return Number.isFinite(start) && Number.isFinite(end) && end >= start ? end - start : null
+}
+export function durationStats(items, kind, from, to) {
+  const valid = items.filter(item => kind === 'ticket' ? item.status !== 'CANCELLED' : !item.cancelled)
+  const responseStart = item => kind === 'ticket' ? item.submittedAt : item.createdAt
+  const responseEnd = item => kind === 'ticket' ? item.approvedAt : item.startedAt
+  const resolveEnd = item => kind === 'ticket' ? item.resolvedAt : item.completedAt
+  const inPeriod = at => at != null && at >= from && at <= to
+  const responses = valid.filter(item => inPeriod(responseEnd(item)) && durationBetween(responseStart(item), responseEnd(item)) != null)
+  const resolves = valid.filter(item => inPeriod(resolveEnd(item)) && durationBetween(responseEnd(item), resolveEnd(item)) != null)
+  return {
+    responses, resolves,
+    averageResponseTime: responses.length ? responses.reduce((sum, item) => sum + responseEnd(item) - responseStart(item), 0) / responses.length : null,
+    averageResolveTime: resolves.length ? resolves.reduce((sum, item) => sum + resolveEnd(item) - responseEnd(item), 0) / resolves.length : null,
   }
 }
 export function staffStats(works, staffId, from, to) {
   const all = works.filter(w => w.staffId === staffId)
   const assigned = all.filter(w => w.assignedAt >= from && w.assignedAt <= to)
-  const responses = all.filter(w => !w.cancelled && w.startedAt != null && w.startedAt >= from && w.startedAt <= to)
-  const completed = works.filter(w => w.completedByStaffId === staffId && isFinished(w) && w.completedAt >= from && w.completedAt <= to)
+  const responseStats = durationStats(works.filter(w => w.startedByStaffId === staffId), 'work', from, to)
+  const resolveStats = durationStats(works.filter(w => w.completedByStaffId === staffId), 'work', from, to)
+  const completed = resolveStats.resolves
   return {
-    open: all.filter(isOpen), assigned, completed,
+    open: all.filter(isOpen), assigned, completed, responses: responseStats.responses,
     response: null,
     resolve: percentage(completed, w => w.completedAt <= w.resolveDueAt),
     responseN: 0, resolveN: completed.length,
-    responseTime: responses.length ? responses.reduce((n, w) => n + w.startedAt - w.createdAt, 0) / responses.length : null,
-    resolveTime: completed.length ? completed.reduce((n, w) => n + w.completedAt - w.startedAt, 0) / completed.length : null,
+    responseTime: responseStats.averageResponseTime,
+    resolveTime: resolveStats.averageResolveTime,
   }
 }
