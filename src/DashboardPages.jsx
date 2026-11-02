@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, BriefcaseBusiness, CalendarDays, CheckCheck, ChevronRight, Clock3, FileCheck2, FileText, Flag, GitBranch, Play, RefreshCw, ShieldCheck, X } from 'lucide-react'
+import { ArrowUpRight, BriefcaseBusiness, CalendarDays, CheckCheck, ChevronRight, CircleAlert, Clock3, FileCheck2, FileText, Flag, GitBranch, Play, RefreshCw, ShieldCheck, X } from 'lucide-react'
 import { CURRENT_STAFF_ID, HOUR, LOCATIONS, NOW, PRIORITY, STAFF, STATUS, TICKET_STATUS, TYPES, dateText, duration, isOpen } from './data.js'
 import { dateInputValue, timeBuckets } from './report-period.js'
 import { attentionSort, completion, dashboardPeriod, dueSoon, inside, overdue, readyToResolve, sortedRows, staffRows, ticketSla, woSla, workAttention, workLocations, workScope } from './dashboard-model.js'
@@ -23,8 +23,8 @@ function Signal({ label, items, hint, tone = 'blue', icon: Icon = Clock3, onClic
 function Row({ label, items, hint, onClick, tone = 'blue' }) {
   return <button className="d-row" onClick={() => onClick(items)}><i className={tone}/><span>{label}{hint && <small>{hint}</small>}</span><b className={tone === 'red' && items.length ? 'text-red' : ''}>{items.length}</b><ChevronRight size={14}/></button>
 }
-function StatusPanel({ title, items, statuses, labels, onList, children }) {
-  return <section className="d-panel"><header><h3>{title}</h3><button onClick={() => onList(`Đang mở · ${title}`, items)}>{items.length} đang mở <ChevronRight size={14}/></button></header><div className="d-distribution" aria-hidden="true">{statuses.map((key,i) => <i key={key} style={{flex: items.filter(x => x.status === key).length || 0.001, background: ['#88c9ff','#308cf1','#ff9d24'][i]}}/>)}</div><div className="d-statuses">{statuses.map(key => <button key={key} onClick={() => onList(`${title} · ${labels[key].label}`, items.filter(x => x.status === key))}>{labels[key].label} <b>{items.filter(x => x.status === key).length}</b></button>)}</div>{children}</section>
+function StatusPanel({ title, items, statuses, labels, onList, children, countLabel = 'đang mở' }) {
+  return <section className="d-panel"><header><h3>{title}</h3><button onClick={() => onList(`Đang mở · ${title}`, items)}>{items.length} {countLabel} <ChevronRight size={14}/></button></header><div className="d-distribution" aria-hidden="true">{statuses.map((key,i) => <i key={key} style={{flex: items.filter(x => x.status === key).length || 0.001, background: ['#88c9ff','#308cf1','#ff9d24'][i]}}/>)}</div><div className="d-statuses" aria-label={`Phân bổ trạng thái ${title}`}>{statuses.map(key => <span key={key}>{labels[key].label} <b>{items.filter(x => x.status === key).length}</b></span>)}</div>{children}</section>
 }
 function SlaCard({ title, metric, caption, ticket, onClick }) {
   return <button className="d-sla-card" onClick={onClick}><span>{title}</span><div><strong>{rate(metric.rate)}</strong>{metric.totalCount > 0 && <b>{metric.metCount}/{metric.totalCount} {ticket ? 'ticket' : 'WO'}</b>}</div>{metric.totalCount ? <div className="d-sla-track"><i style={{width:`${metric.rate}%`}}/><i style={{width:`${100-metric.rate}%`}}/></div> : <small>Chưa có {ticket ? 'ticket' : 'WO'} trong kỳ</small>}<p>{caption}</p></button>
@@ -99,9 +99,16 @@ export function PmsDashboard({works,tickets,runs,onList}) {
       </StatusPanel>
       <StatusPanel title="Work order" items={openW} statuses={['TO_DO','IN_PROGRESS','PAUSED']} labels={STATUS} onList={(title,x)=>list(title,x,'work',true)}>
         <Row label="WO Paused > 24 giờ" hint="Từ lần tạm dừng gần nhất" tone="amber" items={openW.filter(w=>w.status==='PAUSED'&&Number.isFinite(w.pausedAt)&&NOW-w.pausedAt>24*HOUR)} onClick={x=>list('WO tạm dừng lâu',x,'work',true)}/>
+        <Row label="WO In progress" items={openW.filter(w=>w.status==='IN_PROGRESS')} onClick={x=>list('WO In progress',x,'work',true)}/>
+        <Row label="WO To do" hint={`Gồm ${openW.filter(w=>w.status==='TO_DO'&&w.startedAt==null&&w.responseDueAt<NOW).length} WO To do quá lâu · Quá SLA phản hồi`} items={openW.filter(w=>w.status==='TO_DO')} onClick={x=>list('WO To do',x,'work',true)}/>
         <p className="d-panel-note">WO trễ và sắp đến hạn nằm ở “Cần xử lý ngay”.</p>
       </StatusPanel>
-      <section className="d-panel"><header><h3>Quy trình</h3><button onClick={()=>list('Run đang hoạt động',rs.filter(r=>['RUNNING','WAITING_APPROVAL','WAITING_WORK_ORDER'].includes(r.status)),'workflow',true)}>Lượt chạy <ChevronRight size={14}/></button></header><p className="d-panel-note">Độc lập với SLA của WO</p>{[['RUNNING','Run đang chạy'],['WAITING_APPROVAL','Run chờ duyệt'],['WAITING_WORK_ORDER','Run chờ WO hoàn tất']].map(([status,label])=><Row key={status} label={label} items={rs.filter(r=>r.status===status)} onClick={x=>list(label,x,'workflow',true)}/>)}<Row label="Run chờ duyệt > 24 giờ" hint="Là một phần của Run chờ duyệt" tone="violet" items={rs.filter(r=>r.status==='WAITING_APPROVAL'&&r.waitingSince!=null&&NOW-r.waitingSince>24*HOUR)} onClick={x=>list('Run chờ duyệt lâu',x,'workflow',true)}/></section>
+      <StatusPanel title="Quy trình" countLabel="đang hoạt động" items={rs.filter(r=>['RUNNING','WAITING_APPROVAL','WAITING_WORK_ORDER'].includes(r.status))} statuses={['RUNNING','WAITING_APPROVAL','WAITING_WORK_ORDER']} labels={{RUNNING:{label:'Đang chạy'},WAITING_APPROVAL:{label:'Chờ duyệt'},WAITING_WORK_ORDER:{label:'Chờ WO'}}} onList={(_title,x)=>list('Run đang hoạt động',x,'workflow',true)}>
+        <p className="d-panel-note">Độc lập với SLA của WO</p>
+        <Row label="Run đang chạy" items={rs.filter(r=>r.status==='RUNNING')} onClick={x=>list('Run đang chạy',x,'workflow',true)}/>
+        <Row label="Run chờ duyệt" hint={rs.some(r=>r.status==='WAITING_APPROVAL'&&r.waitingSince!=null&&NOW-r.waitingSince>24*HOUR)?<span className="d-wait-warning"><CircleAlert size={13}/>{rs.filter(r=>r.status==='WAITING_APPROVAL'&&r.waitingSince!=null&&NOW-r.waitingSince>24*HOUR).length} run chờ &gt; 24 giờ</span>:'Không có run chờ quá 24 giờ'} items={rs.filter(r=>r.status==='WAITING_APPROVAL')} tone="violet" onClick={x=>list('Run chờ duyệt',x,'workflow',true)}/>
+
+      </StatusPanel>
     </section>
     <section className="d-report" id="performance"><header className="d-report-header"><div><h2>Báo cáo theo kỳ</h2><p>{range.rangeLabel}{range.partial?' · Hôm nay tính tới 10:30':''} · UTC+7</p></div><div><Period value={period} onChange={setPeriod} custom/><button className="d-export" disabled={!range.valid} onClick={exportReport}>Xuất CSV</button></div></header>
       {period==='custom'&&<div className="d-dates"><label>Từ ngày<input aria-label="Từ ngày" type="date" value={start} max={end||today} onChange={e=>setStart(e.target.value)}/></label><label>Đến ngày<input aria-label="Đến ngày" type="date" value={end} min={start} max={today} onChange={e=>setEnd(e.target.value)}/></label></div>}

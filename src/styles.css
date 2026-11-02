@@ -118,21 +118,10 @@ td { padding: 17px 14px; border-bottom: 1px solid #f0f3f7; vertical-align: middl
 td:first-child, th:first-child { padding-left: 22px; }
 td:last-child, th:last-child { padding-right: 18px; }
 tbody tr:last-child td { border-bottom: 0; }
-.work-table { min-width: 850px; }
-.work-table tbody tr { cursor: pointer; transition: background .15s; }
-.work-table tbody tr:hover { background: #f8faff; }
 .table-link { padding: 0; text-align: left; font-weight: 550; font-size: inherit; }
 .code { font-size: 9px; font-weight: 550; color: #5578bf; font-variant-numeric: tabular-nums; letter-spacing: .1px; }
-.work-title { display: block; color: #506078; margin-top: 6px; font-size: 10px; max-width: 210px; line-height: 1.6; }
-.work-table td:nth-child(2) { min-width: 145px; }
-.work-table td:nth-child(5) { min-width: 125px; }
-.work-table td:nth-child(6) { min-width: 146px; }
-.location-name { font-size: 10px; color: #687a92; }
-.work-table small { font-size: 8px; }
 .deadline { display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 500; white-space: nowrap; }
 .table-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 22px; border-top: 1px solid var(--border); font-size: 9px; color: #9ba7b8; }
-.ticket-table { min-width: 720px; }
-.ticket-note-cell { max-width: 260px; color: #7d8a9e; font-size: 10px; line-height: 1.7; }
 .overlay, .drawer-overlay { position: fixed; inset: 0; background: #172d4959; backdrop-filter: blur(3px); z-index: 80; animation: fade-in .2s ease; }
 .overlay { display: flex; align-items: center; justify-content: center; padding: 25px; }
 .dialog { width: 560px; max-width: 100%; max-height: 85vh; background: white; border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 20px 70px #172d4940; overflow: hidden; animation: fade-up .2s ease; }
@@ -141,11 +130,6 @@ tbody tr:last-child td { border-bottom: 0; }
 .dialog h2 { font-size: 19px; margin: 10px 0 6px; }
 .dialog header p { color: #8a98aa; font-size: 11px; }
 .dialog-body { overflow: auto; }
-.dialog .empty { min-height: 220px; }
-.empty { min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; }
-.empty > span { width: 55px; height: 55px; background: #f3f7fd; color: #8ea9d0; border-radius: 16px; display: grid; place-items: center; margin-bottom: 14px; }
-.empty strong { color: #7b8da5; font-size: 12px; }
-.empty p { font-size: 10px; color: #a3aebe; margin-top: 7px; }
 .toast { display: flex; align-items: center; gap: 10px; position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); z-index: 150; background: #fff; box-shadow: 0 5px 30px #213f6a26; padding: 12px 18px 12px 12px; border-radius: 10px; border: 1px solid #e3eaf2; font-size: 12px; min-width: 230px; max-width: 90vw; }
 .toast > span { padding: 7px; color: #249879; background: #edf8f2; border-radius: 7px; display: flex; }
 .drawer-overlay { display: flex; justify-content: flex-end; }
@@ -239,7 +223,6 @@ tbody tr:last-child td { border-bottom: 0; }
 @media (min-width: 1600px) {
   .page { padding-left: 42px; padding-right: 42px; }
   .topbar { padding-left: 42px; padding-right: 42px; }
-  .work-title { max-width: 290px; }
 }
 @media (max-width: 1190px) {
   .main-shell { margin-left: 195px; }
@@ -317,10 +300,6 @@ tbody tr:last-child td { border-bottom: 0; }
   .report-toolbar .select { flex: 1 1 140px; }
   .report-toolbar .select select { width: 100%; }
 }
-.report-duration-cell { min-width: 165px; }
-.report-duration-cell > small, .report-duration-cell > b { display: block; font-size: 9px; margin: 5px 0; white-space: nowrap; }
-.report-duration-cell > small { color: #8b99ad; }
-.report-duration-cell > b { color: #516784; font-weight: 500; }
 .workflow-empty-chart { display: flex; min-height: 200px; flex-direction: column; align-items: center; justify-content: center; gap: 13px; padding: 24px; color: #a0afc4; text-align: center; }
 .workflow-empty-chart b { font-size: 11px; font-weight: 500; color: #8191a8; }
 .workflow-empty-chart > span { font-size: 10px; }
@@ -350,4 +329,3 @@ tbody tr:last-child td { border-bottom: 0; }
 .workflow-linked-work:hover { border-color: #afc9f6; }
 .workflow-open-work { display: flex; align-items: center; gap: 4px; color: #5b80cb; font-size: 9px; margin-top: 4px; }
 .workflow-no-related { font-size: 10px; color: #a2aec0; padding: 13px 0; }
-.ticket-duration-table { min-width: 1170px; }

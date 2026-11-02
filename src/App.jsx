@@ -1,8 +1,9 @@
+import OperationList from './OperationList.jsx'
 import { PmsDashboard, MpaDashboard } from './DashboardPages.jsx'
 import './dashboard-pages.css'
 import { useEffect, useState } from 'react'
-import { Activity, ArrowDownToLine, Bell, Building2, CalendarDays, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileText, MapPin, Pause, Play, Search, ShieldCheck, Wrench, X, Zap } from 'lucide-react'
-import { CURRENT_STAFF_ID, HOUR, NOW, PRIORITY, STAFF, STATUS, TICKET_STATUS, dateText, duration, durationBetween, initialData, isOpen, timing } from './data.js'
+import { Activity, Bell, Building2, Check, CheckCheck, ChevronRight, CircleHelp, Clock3, FileText, MapPin, Pause, Play, ShieldCheck, Wrench, X, Zap } from 'lucide-react'
+import { CURRENT_STAFF_ID, HOUR, NOW, PRIORITY, STAFF, STATUS, TICKET_STATUS, dateText, initialData, isOpen, timing } from './data.js'
 
 import { WorkflowRunList } from './Workflow.jsx'
 import { initialWorkflowRuns } from './workflow-data.js'
@@ -21,20 +22,14 @@ function Button({ children, onClick, icon: Icon, variant = 'primary', disabled, 
 function IconButton({ children, onClick, label, disabled = false, className = '' }) {
   return <button className={cx('icon-button', className)} onClick={onClick} aria-label={label} title={label} disabled={disabled}>{children}</button>
 }
-function Select({ value, onChange, children, label, icon: Icon, className = '' }) {
-  return <label className={cx('select', className)}>{Icon && <Icon size={15} />}<span className="sr-only">{label}</span><select aria-label={label} value={value} onChange={e => onChange(e.target.value)}>{children}</select><ChevronDown size={14} /></label>
-}
 function Avatar({ staff, size = '' }) {
   return <span className={cx('avatar', size)} style={{ '--avatar-color': staff.color }}>{staff.initials}</span>
-}
-function Empty({ title = 'No matching work orders', text = 'Try changing your filters or search term.' }) {
-  return <div className="empty"><span><CheckCheck size={28} strokeWidth={1.5} /></span><strong>{title}</strong><p>{text}</p></div>
 }
 function PortalSwitch({ portal, onChange }) {
   return <div className="portal-switch" aria-label="Choose portal"><button className={portal === 'PMS' ? 'active' : ''} onClick={() => onChange('PMS')}><Building2 size={14} />PMS</button><button className={portal === 'MPA' ? 'active' : ''} onClick={() => onChange('MPA')}><Wrench size={14} />MPA</button></div>
 }
-function Dialog({ title, subtitle, children, onClose, wide = false }) {
-  return <div className="overlay" onMouseDown={onClose}><section role="dialog" aria-modal="true" aria-label={title} className={cx('dialog', wide && 'wide')} onMouseDown={e => e.stopPropagation()}><header><div><div className="eyebrow">SMARTOS · MAINTENANCE</div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><IconButton label="Close" onClick={onClose}><X size={20} /></IconButton></header><div className="dialog-body">{children}</div></section></div>
+function Dialog({ title, subtitle, children, onClose, wide = false, className = '' }) {
+  return <div className="overlay" onMouseDown={onClose}><section role="dialog" aria-modal="true" aria-label={title} className={cx('dialog', wide && 'wide', className)} onMouseDown={e => e.stopPropagation()}><header><div><div className="eyebrow">SMARTOS · MAINTENANCE</div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><IconButton label="Close" onClick={onClose}><X size={20} /></IconButton></header><div className="dialog-body">{children}</div></section></div>
 }
 
 export default function App() {
@@ -73,6 +68,14 @@ export default function App() {
     setWorks(current => current.map(w => w.id === id ? { ...w, ...changes, history: [{ text: message, at: NOW }, ...w.history] } : w))
     if (message) notify(message)
   }
+  const updateTicket = (id,changes,message) => {
+    setTickets(current=>current.map(t=>t.id===id?{...t,...changes}:t))
+    if(changes.status==='CANCELLED') {
+      const next=tickets.map(t=>t.id===id?{...t,...changes}:t)
+      setWorks(current=>current.map(w=>w.ticketIds.includes(id)&&isOpen(w)&&w.ticketIds.every(ticketId=>next.find(t=>t.id===ticketId)?.status==='CANCELLED')?{...w,status:'CLOSED',cancelled:true,closeReason:'TICKET_CANCELLED',closedAt:NOW,history:[{text:'Huỷ do tất cả ticket liên kết đã huỷ',at:NOW},...w.history]}:w))
+    }
+    notify(message)
+  }
   const activeWork = works.find(w => w.id === selected)
   const myNotifications = works.filter(w => w.staffId === CURRENT_STAFF_ID && isOpen(w) && timing(w).tone === 'red').slice(0, 3)
   const topbar = <>
@@ -87,52 +90,10 @@ export default function App() {
       <div className="main-shell"><header className="topbar"><div className="breadcrumb"><Building2 size={15} /><span>Operations</span><ChevronRight size={13} /><strong>Dashboard</strong></div><div className="top-actions">{topbar}</div></header><PmsDashboard works={works} tickets={tickets} runs={workflowRuns} onList={setListing} /></div>
     </div> : <div className="mpa-shell"><header className="mpa-header"><a className="brand" href="#" onClick={e => e.preventDefault()}><span className="brand-symbol"><Zap size={19} fill="currentColor" /></span><strong>smart<span>os</span><i /></strong><span className="staff-portal-label">STAFF PORTAL</span></a><div className="top-actions">{topbar}</div></header><MpaDashboard works={works} tickets={tickets} onUpdate={updateWork} onSelect={setSelected} onList={setListing} /></div>}
     {activeWork && <WorkDetail work={activeWork} tickets={tickets} mpa={portal === 'MPA'} onClose={() => setSelected(null)} onUpdate={updateWork} />}
-    {listing && <Dialog title={listing.title} subtitle={listing.subtitle} onClose={() => setListing(null)} wide>{listing.kind === 'workflow' ? <WorkflowRunList key={listing.title} listing={listing} runs={workflowRuns} works={works} tickets={tickets} onSelectWork={setSelected} notify={notify} /> : <ReportList key={listing.title} listing={listing} works={works} tickets={tickets} onSelect={setSelected} notify={notify} />}</Dialog>}
+    {listing && <Dialog title={listing.title} subtitle={listing.subtitle} onClose={() => setListing(null)} wide className={listing.kind==='workflow'?'':'coworking-list-dialog'}>{listing.kind === 'workflow' ? <WorkflowRunList key={listing.title} listing={listing} runs={workflowRuns} works={works} tickets={tickets} onSelectWork={setSelected} notify={notify} /> : <OperationList onUpdateTicket={updateTicket} onUpdate={updateWork} mpa={portal === 'MPA'} key={listing.title} listing={listing} works={works} tickets={tickets} onSelect={setSelected} notify={notify} />}</Dialog>}
 
     {toast && <div className="toast" role="status"><span><Check size={18} /></span>{toast}</div>}
   </>
-}
-
-function ReportList({ listing, works, tickets, onSelect, notify }) {
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('all')
-  const [staff, setStaff] = useState('all')
-  const [priority, setPriority] = useState('all')
-  const [page, setPage] = useState(1)
-  const isTicket = listing.kind === 'ticket'
-  const ids = new Set(listing.ids)
-  const base = (isTicket ? tickets : works).filter(x => ids.has(x.id))
-  const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replaceAll('đ', 'd').replaceAll('Đ', 'D').toLowerCase()
-  const items = base.filter(x => (status === 'all' || x.status === status) && (priority === 'all' || x.priority === priority) && (isTicket || staff === 'all' || x.staffId === staff) && normalize([x.code, x.title, x.type, x.location, x.area, isTicket ? '' : pickStaff(x.staffId).name].filter(Boolean).join(' ')).includes(normalize(search)))
-  const pages = Math.max(1, Math.ceil(items.length / 8))
-  const current = Math.min(page, pages)
-  const shown = items.slice((current - 1) * 8, current * 8)
-  const resetPage = fn => value => { fn(value); setPage(1) }
-  const exportCsv = () => {
-    const heading = isTicket ? ['Ticket code', 'Ticket type', 'Location', 'Area', 'Status', 'Submitted at', 'Approved at', 'Resolved at', 'Resolution SLA deadline', 'Response (minutes)', 'Resolution (minutes)', 'SLA results'] : ['WO code', 'Work order title', 'Location', 'Area', 'Current assignee', 'Assignee at completion', 'Status', 'Created at', 'First started at', 'Completed at', 'Resolution SLA deadline', 'Due date', 'Response (minutes)', 'Resolution (minutes)', 'SLA results']
-    const outcome = x => {
-      const at = isTicket ? x.resolvedAt : x.completedAt
-      if (isTicket ? x.status === 'CANCELLED' : x.cancelled) return 'Not assessed (cancelled)'
-      if (at != null && x.resolveDueAt != null) return at <= x.resolveDueAt ? 'On time' : 'Late'
-      return x.resolveDueAt != null && x.resolveDueAt < NOW ? 'Currently overdue' : 'No outcome yet'
-    }
-    const rows = [heading, ...items.map(x => isTicket ? [x.code, x.type, x.location, x.area, TICKET_STATUS[x.status].label, dateText(x.submittedAt), dateText(x.approvedAt), dateText(x.resolvedAt), dateText(x.resolveDueAt), durationBetween(x.submittedAt, x.approvedAt) == null ? '' : (x.approvedAt - x.submittedAt) / 60000, durationBetween(x.approvedAt, x.resolvedAt) == null ? '' : (x.resolvedAt - x.approvedAt) / 60000, outcome(x)] : [x.code, x.title, x.location, x.area, pickStaff(x.staffId).name, pickStaff(x.completedByStaffId)?.name || '', STATUS[x.status].label, dateText(x.createdAt), dateText(x.startedAt), dateText(x.completedAt), dateText(x.resolveDueAt), dateText(x.dueDate), x.startedAt ? (x.startedAt - x.createdAt) / 60000 : '', x.completedAt ? (x.completedAt - x.startedAt) / 60000 : '', outcome(x)])]
-    const csv = '\uFEFF' + rows.map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\r\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
-    const link = document.createElement('a'); link.href = url; link.download = `smartos-${isTicket ? 'ticket' : 'wo'}-report.csv`; link.click()
-    setTimeout(() => URL.revokeObjectURL(url), 2000)
-    notify(`Exported ${items.length} filtered results`)
-  }
-  return <><div className="report-toolbar"><label className="search-input"><Search size={15} /><input aria-label="Search report" placeholder="Search code, title, location..." value={search} onChange={e => resetPage(setSearch)(e.target.value)} />{search && <button aria-label="Clear search" onClick={() => resetPage(setSearch)('')}><X size={13} /></button>}</label><Select label="Report status" value={status} onChange={resetPage(setStatus)}><option value="all">All statuses</option>{Object.entries(isTicket ? TICKET_STATUS : STATUS).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}</Select>{!isTicket && <Select label="Report staff" value={staff} onChange={resetPage(setStaff)}><option value="all">All staff</option>{STAFF.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>}<Select label="Report priority" value={priority} onChange={resetPage(setPriority)}><option value="all">All priorities</option>{Object.entries(PRIORITY).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}</Select><Button variant="secondary" icon={ArrowDownToLine} disabled={!items.length} onClick={exportCsv}>Export CSV ({items.length})</Button></div><div className="report-result-count"><b>{items.length}</b> / {base.length} results{(search || status !== 'all' || staff !== 'all' || priority !== 'all') && <button onClick={() => { setSearch(''); setStatus('all'); setStaff('all'); setPriority('all'); setPage(1) }}>Clear filters</button>}<span>Export all filtered results across all pages</span></div>{isTicket ? <TicketList items={shown} /> : <WorkTable works={shown} onSelect={onSelect} />}<div className="report-milestone-note"><CalendarDays size={14} />{isTicket ? 'Ticket response: Submitted to Approved. Resolution: Approved to Resolved. The resolution SLA starts at approval.' : 'Resolution SLA starts at the first Start. The separate due date does not affect SLA.'}</div><div className="table-footer"><span>{items.length ? `${(current - 1) * 8 + 1}–${Math.min(current * 8, items.length)}` : '0'} / {items.length} results</span><div className="pagination"><IconButton label="Previous page" disabled={current === 1} onClick={() => setPage(Math.max(1, current - 1))}><ChevronLeft size={16} /></IconButton><span>{current} / {pages}</span><IconButton label="Next page" disabled={current === pages} onClick={() => setPage(Math.min(pages, current + 1))}><ChevronRight size={16} /></IconButton></div></div></>
-}
-
-function WorkTable({ works, onSelect }) {
-  if (!works.length) return <Empty />
-  return <div className="table-scroll"><table className="work-table"><thead><tr><th>WORK ORDER</th><th>LOCATION / AREA</th><th>PRIORITY</th><th>ASSIGNEE</th><th>STATUS</th><th>DEADLINE / SLA</th><th>TIMELINE</th><th /></tr></thead><tbody>{works.map(w => { const t = timing(w); const s = pickStaff(w.staffId); return <tr key={w.id} onClick={() => onSelect(w.id)}><td><button className="code table-link">{w.code}</button><span className="work-title">{w.title}</span></td><td><span className="location-name">{w.location}</span><small className="block muted">{w.area}</small></td><td><Badge tone={PRIORITY[w.priority].tone}>{PRIORITY[w.priority].label}</Badge></td><td><div className="person"><Avatar staff={s} size="tiny" /><span>{s.name.split(' ').slice(-2).join(' ')}</span></div></td><td><Badge tone={STATUS[w.status].tone}>{STATUS[w.status].label}</Badge></td><td><div className={cx('deadline', `text-${t.tone}`)}><Clock3 size={13} />{t.label}</div><small className="block muted">{!w.completedAt && t.due ? `${t.detail} · ` : ''}{w.completedAt ? (w.cancelled ? 'Not assessed' : w.completedAt <= w.resolveDueAt ? 'Within resolution SLA' : 'Outside resolution SLA') : t.due ? dateText(t.due) : t.detail}</small></td><td className="report-duration-cell"><small>Created: {dateText(w.createdAt)}</small><small>Started: {dateText(w.startedAt)}</small>{w.startedAt != null && <b>Response: {duration(w.startedAt - w.createdAt)}</b>}<small>Completed: {dateText(w.completedAt)}</small>{w.completedAt && <b>Resolution: {duration(w.completedAt - w.startedAt)}</b>}</td><td><ChevronRight size={15} className="muted" /></td></tr> })}</tbody></table></div>
-}
-function TicketList({ items }) {
-  if (!items.length) return <Empty title="No matching tickets" />
-  return <div className="table-scroll"><table className="ticket-table ticket-duration-table"><thead><tr><th>TICKET CODE</th><th>TICKET TYPE</th><th>LOCATION / AREA</th><th>DESCRIPTION</th><th>STATUS</th><th>SUBMITTED / APPROVED / RESOLVED</th><th>DURATION / RESOLUTION SLA</th></tr></thead><tbody>{items.map(t => { const responseTime = durationBetween(t.submittedAt, t.approvedAt); const resolveTime = durationBetween(t.approvedAt, t.resolvedAt); const overdue = !['RESOLVED', 'CANCELLED'].includes(t.status) && t.resolveDueAt != null && t.resolveDueAt < NOW; return <tr key={t.id}><td><b className="code">{t.code}</b></td><td>{t.type}</td><td>{t.location}<small className="block muted">{t.area}</small></td><td className="ticket-note-cell">{t.note}</td><td><Badge tone={TICKET_STATUS[t.status].tone}>{TICKET_STATUS[t.status].label}</Badge></td><td className="report-duration-cell"><small>Submitted: {dateText(t.submittedAt)}</small><small>Approved: {dateText(t.approvedAt)}</small><small>Resolved: {dateText(t.resolvedAt)}</small></td><td className="report-duration-cell"><b>Response: {responseTime == null ? '—' : duration(responseTime)}</b><b>Resolution: {resolveTime == null ? '—' : duration(resolveTime)}</b><small className={overdue ? 'text-red' : 'muted'}>{t.status === 'CANCELLED' ? 'SLA not assessed' : t.resolveDueAt == null ? 'Resolution SLA not started' : `Due: ${dateText(t.resolveDueAt)}`}</small></td></tr> })}</tbody></table></div>
 }
 
 function WorkDetail({ work: w, tickets, mpa, onClose, onUpdate }) {
