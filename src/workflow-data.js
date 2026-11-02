@@ -1,5 +1,4 @@
 import { HOUR, NOW, TYPES, isOpen } from './data.js'
-import { timeBuckets } from './report-period.js'
 
 export const WORKFLOW_STATUS = {
   RUNNING: { label: 'Running', tone: 'blue' },
@@ -17,13 +16,11 @@ export const WORKFLOWS = [
   { id: 'wf-maintenance', name: 'Scheduled maintenance & inspections', code: 'WF-005' },
 ]
 export const WAIT_WARNING = 24 * HOUR
-export const isActiveRun = run => ['RUNNING', 'WAITING_APPROVAL', 'WAITING_WORK_ORDER'].includes(run.status)
 export const isWaitingRun = run => ['WAITING_APPROVAL', 'WAITING_WORK_ORDER'].includes(run.status)
 export const isLongWaitingRun = run => isWaitingRun(run) && run.waitingSince != null && NOW - run.waitingSince > WAIT_WARNING
-const inPeriod = (at, from, to) => at != null && at >= from && at <= to
 
 export function initialWorkflowRuns(works, tickets) {
-  const workRuns = works.map((work, index) => {
+  const workRuns = works.filter(work => !work.ticketIds.length || work.ticketIds.some(id => tickets.find(t => t.id === id)?.workflowMode === 'workflow')).map((work, index) => {
     const linkedTickets = tickets.filter(ticket => work.ticketIds.includes(ticket.id))
     const type = linkedTickets[0]?.type
     const definition = type ? WORKFLOWS[TYPES.indexOf(type)] : WORKFLOWS[4]
@@ -42,7 +39,7 @@ export function initialWorkflowRuns(works, tickets) {
     }
   })
   // Runs without WO illustrate waiting for approval and processing before task creation.
-  const ticketRuns = tickets.filter(ticket => !works.some(work => work.ticketIds.includes(ticket.id))).map((ticket, index) => {
+  const ticketRuns = tickets.filter(ticket => ticket.workflowMode === 'workflow' && !works.some(work => work.ticketIds.includes(ticket.id))).map((ticket, index) => {
     const definition = WORKFLOWS[TYPES.indexOf(ticket.type)]
     const status = ticket.status === 'CANCELLED' ? 'CANCELLED' : ticket.status === 'RESOLVED' ? 'SUCCEEDED' : ticket.status === 'SUBMITTED' ? 'WAITING_APPROVAL' : 'RUNNING'
     return {
@@ -57,27 +54,4 @@ export function initialWorkflowRuns(works, tickets) {
     }
   })
   return [...workRuns, ...ticketRuns].sort((a, b) => b.startedAt - a.startedAt)
-}
-
-export function workflowStats(runs, works, from, to) {
-  const started = runs.filter(run => inPeriod(run.startedAt, from, to))
-  const ended = runs.filter(run => inPeriod(run.finishedAt, from, to))
-  const succeeded = ended.filter(run => run.status === 'SUCCEEDED')
-  const failed = ended.filter(run => run.status === 'FAILED')
-  const cancelled = ended.filter(run => run.status === 'CANCELLED')
-  const assessed = succeeded.length + failed.length
-  const workIds = new Set(runs.flatMap(run => run.workOrderIds))
-  const createdWorks = works.filter(work => workIds.has(work.id) && inPeriod(work.createdAt, from, to))
-  return {
-    started, ended, succeeded, failed, cancelled, createdWorks,
-    successRate: assessed ? Math.round(succeeded.length / assessed * 100) : null,
-    averageDuration: succeeded.length ? succeeded.reduce((sum, run) => sum + run.finishedAt - run.startedAt, 0) / succeeded.length : null,
-  }
-}
-
-export function workflowBuckets(runs, from, to, granularity = 'day') {
-  return timeBuckets(from, to, granularity).map(bucket => {
-    const ended = runs.filter(run => inPeriod(run.finishedAt, bucket.start, bucket.end))
-    return { ...bucket, succeeded: ended.filter(run => run.status === 'SUCCEEDED'), failed: ended.filter(run => run.status === 'FAILED'), cancelled: ended.filter(run => run.status === 'CANCELLED') }
-  })
 }

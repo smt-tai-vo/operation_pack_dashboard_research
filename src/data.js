@@ -46,10 +46,10 @@ export function initialData() {
       id: `t${i}`, code: `TIC-${String(4289 - i).padStart(6, '0')}`, type: TYPES[i % 5],
       location: LOCATIONS[Math.floor(i / 2) % 3], area: `Floor ${i % 5 + 1} · ${['Lotus meeting room', 'Pantry', 'Workspace', 'Reception'][i % 4]}`,
       status, createdAt, submittedAt, approvedAt, resolvedAt, cancelledAt: status === 'CANCELLED' ? Math.min(NOW, createdAt + 4 * HOUR) : null,
-      responseDueAt: submittedAt + 2 * HOUR, resolveDueAt: approvedAt == null ? null : approvedAt + resolveHours * HOUR,
+      responseDueAt: submittedAt + 2 * HOUR, resolveDueAt: createdAt + resolveHours * HOUR,
       priority: ['HIGH', 'MEDIUM', 'URGENT', 'LOW'][i % 4],
       note: ['The air conditioner is noisy and is not cooling well. Please inspect it.', 'The power outlet in the workspace is intermittent.', 'Water is leaking from the pipe joint under the sink.', 'The light is flickering and needs inspection or replacement.'][i % 4],
-      ready: status === 'IN_PROGRESS' && i % 2 === 0,
+      workflowMode: i % 3 === 0 ? 'workflow' : 'manual',
     }
   })
   const works = Array.from({ length: 40 }, (_, i) => {
@@ -80,6 +80,7 @@ export function initialData() {
       assignmentStartedAt: startedAt, assignmentCompletedAt: completedAt,
       closeReason, cancelled, checklist, ticketIds: linked.map(t => t.id),
       note: 'Inspect the site and make it safe before starting. Notify your supervisor if additional materials are needed.',
+      pausedAt: status === 'PAUSED' ? NOW - (i % 2 ? 30 : 3) * HOUR : null,
       pauseReason: status === 'PAUSED' ? 'Waiting for replacement parts from the supplier.' : null,
       history: [
         ...(finished ? [{ text: `${staff.name} completed the work order`, at: completedAt }] : []),
@@ -89,10 +90,6 @@ export function initialData() {
       ],
     }
   })
-  for (const ticket of tickets) {
-    const linked = works.filter(w => w.ticketIds.includes(ticket.id))
-    ticket.ready = ticket.status === 'IN_PROGRESS' && linked.length > 0 && linked.every(w => ['COMPLETED', 'CLOSED'].includes(w.status))
-  }
   return { tickets, works }
 }
 
@@ -109,54 +106,17 @@ export const duration = ms => {
 export function timing(w) {
   if (w.status === 'CLOSED') return { label: w.closeReason === 'ARCHIVED' ? 'Archived' : 'Cancelled', tone: 'neutral' }
   if (w.status === 'COMPLETED') return { label: 'Completed', tone: 'green' }
-  if (!w.startedAt) return { label: STATUS[w.status].label, detail: 'Resolution SLA not started', tone: 'neutral', due: null }
-  const due = w.resolveDueAt
-  const delta = due - NOW
-  return { label: delta < 0 ? `Overdue ${duration(-delta)}` : `Remaining ${duration(delta)}`, detail: 'Resolution SLA', tone: delta < 0 ? 'red' : delta < 4 * HOUR ? 'amber' : 'muted', due }
+  const milestones = [
+    ...(!w.startedAt ? [{ due: w.responseDueAt, detail: 'Response SLA', threshold: w.responseHours * HOUR * 0.25 }] : []),
+    ...(w.startedAt ? [{ due: w.resolveDueAt, detail: 'Resolution SLA', threshold: 4 * HOUR }] : []),
+    ...(w.dueDate ? [{ due: w.dueDate, detail: 'Due date', threshold: 4 * HOUR }] : []),
+  ].filter(item => Number.isFinite(item.due)).sort((a, b) => a.due - b.due)
+  const milestone = milestones.find(item => item.due < NOW) || milestones.find(item => item.due - NOW <= item.threshold) || milestones[0]
+  if (!milestone) return { label: STATUS[w.status].label, detail: 'No deadline', tone: 'neutral', due: null }
+  const delta = milestone.due - NOW
+  return { label: delta < 0 ? `Overdue ${duration(-delta)}` : `Remaining ${duration(delta)}`, detail: milestone.detail, tone: delta < 0 ? 'red' : delta <= milestone.threshold ? 'amber' : 'muted', due: milestone.due }
+
 }
-export function percentage(items, test) {
-  return items.length ? Math.round(items.filter(test).length / items.length * 100) : null
-}
-export function slaStats(items, kind = 'work') {
-  const valid = items.filter(x => kind === 'ticket' ? x.status !== 'CANCELLED' : !x.cancelled)
-  const responses = valid.filter(x => (kind === 'ticket' ? x.approvedAt : x.startedAt) != null && x.responseDueAt != null)
-  const resolves = valid.filter(x => (kind === 'ticket' ? x.resolvedAt : x.completedAt) != null && x.resolveDueAt != null)
-  return {
-    response: percentage(responses, x => (kind === 'ticket' ? x.approvedAt : x.startedAt) <= x.responseDueAt),
-    resolve: percentage(resolves, x => (kind === 'ticket' ? x.resolvedAt : x.completedAt) <= x.resolveDueAt),
-    responseN: responses.length, resolveN: resolves.length,
-  }
-}
-// Durations are milliseconds; each average uses its own milestone cohort.
 export function durationBetween(start, end) {
   return Number.isFinite(start) && Number.isFinite(end) && end >= start ? end - start : null
-}
-export function durationStats(items, kind, from, to) {
-  const valid = items.filter(item => kind === 'ticket' ? item.status !== 'CANCELLED' : !item.cancelled)
-  const responseStart = item => kind === 'ticket' ? item.submittedAt : item.createdAt
-  const responseEnd = item => kind === 'ticket' ? item.approvedAt : item.startedAt
-  const resolveEnd = item => kind === 'ticket' ? item.resolvedAt : item.completedAt
-  const inPeriod = at => at != null && at >= from && at <= to
-  const responses = valid.filter(item => inPeriod(responseEnd(item)) && durationBetween(responseStart(item), responseEnd(item)) != null)
-  const resolves = valid.filter(item => inPeriod(resolveEnd(item)) && durationBetween(responseEnd(item), resolveEnd(item)) != null)
-  return {
-    responses, resolves,
-    averageResponseTime: responses.length ? responses.reduce((sum, item) => sum + responseEnd(item) - responseStart(item), 0) / responses.length : null,
-    averageResolveTime: resolves.length ? resolves.reduce((sum, item) => sum + resolveEnd(item) - responseEnd(item), 0) / resolves.length : null,
-  }
-}
-export function staffStats(works, staffId, from, to) {
-  const all = works.filter(w => w.staffId === staffId)
-  const assigned = all.filter(w => w.assignedAt >= from && w.assignedAt <= to)
-  const responseStats = durationStats(works.filter(w => w.startedByStaffId === staffId), 'work', from, to)
-  const resolveStats = durationStats(works.filter(w => w.completedByStaffId === staffId), 'work', from, to)
-  const completed = resolveStats.resolves
-  return {
-    open: all.filter(isOpen), assigned, completed, responses: responseStats.responses,
-    response: null,
-    resolve: percentage(completed, w => w.completedAt <= w.resolveDueAt),
-    responseN: 0, resolveN: completed.length,
-    responseTime: responseStats.averageResponseTime,
-    resolveTime: resolveStats.averageResolveTime,
-  }
 }

@@ -1,57 +1,14 @@
 import React, { useState } from 'react'
-import { Activity, ArrowDownToLine, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleHelp, Clock3, FileText, GitBranch, MapPin, Search, Wrench, X } from 'lucide-react'
+import { ArrowDownToLine, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleHelp, FileText, GitBranch, MapPin, Search, Wrench, X } from 'lucide-react'
 import { NOW, STATUS, TICKET_STATUS, dateText, duration } from './data.js'
-import { granularityLabel, rangeText } from './report-period.js'
-import { WORKFLOWS, WORKFLOW_STATUS, isActiveRun, isLongWaitingRun, workflowBuckets, workflowStats } from './workflow-data.js'
+import { WORKFLOWS, WORKFLOW_STATUS, isLongWaitingRun } from './workflow-data.js'
 
-const pct = value => value == null ? '—' : `${value}%`
 function RunBadge({ status }) {
   const item = WORKFLOW_STATUS[status]
   return <span className={`badge ${item.tone}`}><i />{item.label}</span>
 }
 function WorkflowSelect({ label, value, onChange, children }) {
   return <label className="select"><span className="sr-only">{label}</span><select aria-label={label} value={value} onChange={event => onChange(event.target.value)}>{children}</select><ChevronDown size={14} /></label>
-}
-
-export function WorkflowSection({ runs, works, report, from, to, granularity = 'day', scopeLabel, rangeLabel, onList }) {
-  const stats = workflowStats(runs, works, from, to)
-  const active = runs.filter(isActiveRun)
-  const failed = runs.filter(run => run.status === 'FAILED')
-  const longWaiting = runs.filter(isLongWaitingRun)
-  const list = (title, items, context = report ? rangeLabel : 'Current · 22 Oct 2026, 10:30') => onList({ title, kind: 'workflow', ids: items.map(run => run.id), subtitle: `${scopeLabel} · ${context}` })
-  const byDefinition = WORKFLOWS.map(definition => {
-    const items = runs.filter(run => run.workflowId === definition.id)
-    return { ...definition, items, ...workflowStats(items, works, from, to) }
-  })
-  if (!report) return <section className="card dashboard-block dashboard-workflow" aria-label="Workflow">
-    <header className="dashboard-block-heading"><span className="monitor-icon blue"><GitBranch size={18} /></span><h2>Workflow</h2><button className="dashboard-total" aria-label={`Active workflow runs: ${active.length}`} onClick={() => list('Active workflow runs', active)}><span>Active</span><strong>{active.length}</strong><ChevronRight size={16} /></button></header>
-    <div className="dashboard-workflow-priorities">{[
-      { label: 'Failed', title: 'Failed runs', items: failed, icon: CircleAlert, tone: 'red', hint: 'Inspect the failed step' },
-      { label: 'Waiting over 24 hours', title: 'Waiting for over 24 hours', items: longWaiting, icon: Clock3, tone: 'violet', hint: 'Waiting for approval or WOs' },
-    ].map(item => <button key={item.label} className="monitor-row" onClick={() => list(item.title, item.items)}><span className={`monitor-icon ${item.tone}`}><item.icon size={16} /></span><span className="monitor-label">{item.label}<small>{item.hint}</small></span><strong>{item.items.length}</strong><ChevronRight size={15} /></button>)}</div>
-    <p className="dashboard-block-note"><CircleHelp size={13} /><span>Filter the Active list to view waiting statuses. <span title="The 24-hour threshold is illustrative, not an SLA. Groups can overlap. A failed run does not indicate whether its underlying issue has been fixed.">About these signals</span></span></p>
-  </section>
-  const buckets = workflowBuckets(runs, from, to, granularity)
-  const maxCount = Math.max(1, ...buckets.map((bucket, index) => bucket.succeeded.length + bucket.failed.length + bucket.cancelled.length))
-  const failureRanking = byDefinition.filter(item => item.failed.length).sort((a, b) => b.failed.length - a.failed.length).slice(0, 5)
-  const maxFailures = Math.max(1, ...failureRanking.map(item => item.failed.length))
-  return <section className="workflow-section workflow-report" aria-label="Workflow reports">
-    <div className="section-caption"><span><GitBranch size={14} />WORKFLOW PERFORMANCE</span><small>{rangeLabel}</small></div>
-    <div className="workflow-summary-grid">
-      <button className="card workflow-summary" onClick={() => list('Workflow runs started in period', stats.started)}><span className="monitor-icon blue"><GitBranch size={17} /></span><span>Runs started</span><strong>{stats.started.length}</strong><small>By start date</small></button>
-      <button className="card workflow-summary" onClick={() => list('Assessed workflow outcomes', [...stats.succeeded, ...stats.failed])}><span className="monitor-icon green"><CheckCheck size={17} /></span><span>Success rate</span><strong className="text-green">{pct(stats.successRate)}</strong><small>{stats.succeeded.length} succeeded / {stats.succeeded.length + stats.failed.length} assessed</small></button>
-      <button className="card workflow-summary" onClick={() => list('Workflow runs failed in period', stats.failed)}><span className="monitor-icon red"><CircleAlert size={17} /></span><span>Failed runs</span><strong className="text-red">{stats.failed.length}</strong><small>By completion date</small></button>
-      <button className="card workflow-summary" onClick={() => list('Successful workflow duration', stats.succeeded)}><span className="monitor-icon violet"><Clock3 size={17} /></span><span>Average run duration</span><strong className="workflow-duration">{stats.averageDuration == null ? '—' : duration(stats.averageDuration)}</strong><small>{stats.succeeded.length} successful runs in period</small></button>
-    </div>
-    <div className="workflow-charts-grid">
-      <section className="card workflow-run-chart"><div className="section-heading"><div><h2>Run outcomes over time</h2><p>{granularityLabel(granularity)} · By completion date · Select a bar to view runs</p></div><Activity size={17} className="muted" /></div>
-        {stats.ended.length ? <div className="workflow-column-chart" role="group" aria-label="Workflow outcomes chart" data-granularity={granularity}><div className="workflow-chart-scale"><span>{maxCount}</span><span>{Math.round(maxCount / 2)}</span><span>0</span></div><div className="workflow-chart-columns" style={{ gap: buckets.length > 14 ? 3 : 9 }}>{buckets.map((bucket, index) => <div className="workflow-chart-column" key={bucket.start}><div className="workflow-bar-stack">{[['succeeded', 'Succeeded', 'green'], ['failed', 'Failed', 'red'], ['cancelled', 'Cancelled', 'neutral']].map(([key, label, tone]) => bucket[key].length > 0 && <button key={key} className={`workflow-chart-segment ${tone}`} style={{ height: `${bucket[key].length / maxCount * 100}%` }} aria-label={`${rangeText(bucket.start, bucket.end)}: ${bucket[key].length} runs ${label.toLowerCase()}`} title={`${rangeText(bucket.start, bucket.end)}: ${bucket[key].length} ${label.toLowerCase()}`} onClick={() => list(`Workflow ${label.toLowerCase()} by interval`, bucket[key], rangeText(bucket.start, bucket.end))}>{buckets.length <= 7 && bucket[key].length}</button>)}</div><span>{index === buckets.length - 1 || (index % Math.max(1, Math.ceil(buckets.length / 5)) === 0 && buckets.length - 1 - index >= Math.max(1, Math.ceil(buckets.length / 5)) / 2) ? bucket.label : ''}</span></div>)}</div></div> : <div className="workflow-empty-chart"><GitBranch size={28} /><b>No runs completed in this period</b><span>Try a different reporting period.</span></div>}
-        <div className="chart-legend workflow-chart-legend">{[['Succeeded', stats.succeeded, 'green'], ['Failed', stats.failed, 'red'], ['Cancelled', stats.cancelled, 'neutral']].map(([label, items, tone]) => <button key={label} onClick={() => list(`Workflow ${label.toLowerCase()} in period`, items)}><i className={tone} />{label}<b>{items.length}</b></button>)}</div>
-      </section>
-      <section className="card workflow-failure-chart"><div className="section-heading"><div><h2>Workflows with the most failures</h2><p>Failed runs completed in the period</p></div><CircleAlert size={17} className="text-red" /></div><div className="workflow-failure-bars">{failureRanking.length ? failureRanking.map(item => <button key={item.id} onClick={() => list(`Failed runs · ${item.name}`, item.failed)}><span>{item.name}<b>{item.failed.length}</b></span><i><span style={{ width: `${item.failed.length / maxFailures * 100}%` }} /></i></button>) : <div className="workflow-empty-chart"><CheckCheck size={26} /><b>No failed runs</b><span>Within the selected reporting period.</span></div>}</div></section>
-    </div>
-    <details className="card report-details workflow-performance-table"><summary><span><b>Details by workflow</b><small>Outcomes and duration by workflow</small></span><ChevronDown size={16} /></summary><div className="section-heading"><div><h2>Performance by workflow</h2><p>Select a metric to view the matching runs.</p></div><span className="count-pill">{byDefinition.filter(item => item.items.length).length} workflows with data</span></div><div className="table-scroll"><table><thead><tr><th>WORKFLOW</th><th>RUNS STARTED</th><th>SUCCEEDED</th><th>FAILED</th><th>CANCELLED</th><th>SUCCESS RATE</th><th>AVG RUN DURATION</th><th>WOs CREATED</th></tr></thead><tbody>{byDefinition.map(item => <tr key={item.id}><td><b>{item.name}</b><small className="block muted">{item.code}</small></td>{[['started', 'Runs started'], ['succeeded', 'Succeeded'], ['failed', 'Failed'], ['cancelled', 'Cancelled']].map(([key, label]) => <td key={key}><button className={`metric-link ${key === 'failed' ? 'text-red' : ''}`} onClick={() => list(`${label} · ${item.name}`, item[key])}>{item[key].length}</button></td>)}<td><button className="metric-link text-green" onClick={() => list(`Assessed outcomes · ${item.name}`, [...item.succeeded, ...item.failed])}>{pct(item.successRate)}</button></td><td><button className="workflow-time-link" onClick={() => list(`Run duration · ${item.name}`, item.succeeded)}>{item.averageDuration == null ? '—' : duration(item.averageDuration)}</button></td><td><button className="metric-link" onClick={() => onList({ title: `WOs created in period · ${item.name}`, kind: 'work', ids: item.createdWorks.map(work => work.id), subtitle: `${scopeLabel} · ${rangeLabel}` })}>{item.createdWorks.length}</button></td></tr>)}</tbody></table></div><div className="workflow-definition-note"><CircleHelp size={14} /><p>Success rate = succeeded ÷ (succeeded + failed), using runs completed in the period; cancelled runs are excluded. Average duration includes waiting time for successful runs. Runs started and WOs created use their own creation dates and may differ from period outcomes.</p></div></details>
-  </section>
 }
 
 export function WorkflowRunList({ listing, runs, works, tickets, onSelectWork, notify }) {

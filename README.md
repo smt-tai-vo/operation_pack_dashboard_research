@@ -1,6 +1,8 @@
-# SmartOS — Maintenance operations prototype
+# SmartOS maintenance dashboard prototype
 
-React + Vite. The interface, sample content, CSV exports and accessibility labels are in English. All data is a static demo as of **22 Oct 2026, 10:30 (UTC+7)**; there is no backend or database connection. Refresh to reset trial actions.
+React + Vite prototype with static sample records at 22 Oct 2026, 10:30 (UTC+7). It does not call backend APIs or apply migrations. Refresh the browser to reset record actions. Location/type and period selections persist for the browser session.
+
+## Run
 
 ```sh
 pnpm install
@@ -9,50 +11,20 @@ pnpm test
 pnpm build
 ```
 
-## Pages
+## PMS
 
-- **PMS Dashboard (`#dashboard`):** three blocks for Ticket requests, Work orders and Workflow. Each block has one Open/Active total; tickets and WOs have a clickable status row followed by overdue/due-soon signals, plus ticket readiness to resolve. Select a total, status or signal to open its list.
-- **PMS Reports (`#reports`):** volume, resolution SLA, average response/resolution times, ticket types, locations, workflow results and staff performance. Metrics and chart points open their exact record groups.
-- **MPA (`#mpa`):** personal performance and up to four priority open WOs. Overdue, due soon and urgent work appears first. Open a WO to inspect its checklist, notes, linked tickets and history, or try start/pause/resume/complete actions.
-- Dashboard and Reports have separate navigation and support browser Back/Forward. PMS location, type and period selections persist between those pages. Current backlog and priority work are independent of report dates.
+One page at `#dashboard`: Needs action now → Needs monitoring → Period report. The reference layout is adapted to the updated decisions: no banner, ready-to-resolve manual tickets and due-soon WOs appear in action cards, and failed runs do not repeat in monitoring. Both current sections are independent of report dates.
 
-## Reporting periods
+Shared location/type filters apply before staff grouping. Staff need no location assignment. Multi-location WOs count once in each relevant location; totals deduplicate WOs. SLA belongs to the current assignee's WOs, not an employee performance score.
 
-- Default: **This month** on PMS and MPA. Select this/last week, month, quarter or year, or custom dates.
-- Weeks start on Monday; months, quarters and years follow the calendar in the demo business timezone, UTC+7. Reporting does not depend on the browser timezone.
-- Current periods stop at the demo timestamp. Compare with the same elapsed duration in the previous calendar period, capped at its end when it is shorter. Completed calendar periods compare with the full previous calendar period.
-- Custom dates include both boundary dates, stop at the demo timestamp and compare with the immediately preceding interval of equal elapsed length.
-- Charts show daily buckets for weeks/months, calendar-week buckets for quarters and calendar-month buckets for years. Custom ranges use daily buckets up to 31 days, weekly up to 120 days, and monthly thereafter. Partial first/last buckets are clipped to the exact report range.
-- Created volume uses creation dates; completed volume and resolution SLA use completion dates. Records created before the period are included when completed in it. Empty baselines show no percentage change; empty result sets show a dash rather than zero SLA.
+The report defaults to seven local calendar days through the demo timestamp. Choose 30 days or custom dates (maximum 90 days, no future end date). Three SLA cards show WO response, WO resolution and ticket resolution, with daily ticket/WO charts and sortable location/staff tables. Rates display whenever there is at least one evaluated record; no minimum-five rule. Empty samples display a dash. Tables show 20 rows initially and support Show more, with totals for all scoped rows. CSV exports summary, daily series, locations and staff with weighted SLA numerators/denominators. CSV and quick actions are local prototype interactions, not server exports or workflow execution.
 
-## Metrics and interactions
+## MPA
 
-- Each Ticket/WO overview shows created volume, resolved/completed volume, resolution SLA, average response and average resolution once. The SLA donut is green over light gray, with the rate in its center and clickable on-time/late counts.
-- Ticket response: Submitted → Approved, using tickets approved in the period. Ticket resolution: Approved → Resolved, using tickets resolved in the period. The resolution SLA starts at approval.
-- WO response: Created → First start, using WOs first started in the period. WO resolution: First start → Completed, using WOs completed in the period. Pauses count; the due date is independent of SLA.
-- Cancelled records and missing/negative durations are excluded from performance metrics. Archived WOs keep their completion outcomes. CSV exports include timestamps, durations in minutes and SLA outcomes.
-- Ticket type rankings switch between most reported (creation date, including later cancellations) and most resolved (resolution date). Location rankings use created requests. Ranking items open the matching ticket list. The expandable type table includes current open/overdue backlog and period outcomes.
-- Staff response belongs to the first technician to start. Resolution and SLA belong to the assignee at completion. The demo does not split durations by reassignment.
-- Detail tables for ticket types, workflows and staff start collapsed. List modals support search, filters, pagination and CSV export of all filtered rows. Closing a WO drawer returns to the underlying list.
+At `#mpa`: current open/overdue counts, assignment completion x/y and response/resolution SLA for 7/30 days, then at most five priority WOs. Completion uses current assignedAt in the period, excluding cancelled WOs and retaining archived completions. SLA uses its event cohort, independent of assignment dates. Reassignment moves all metrics to the current assignee.
 
-## Workflows
+Attention order: oldest overdue deadline, nearest due-soon deadline, urgent, To do, remaining work; priority and assignment time break ties. WO deadlines remain independent, while due-date display takes precedence over future resolution SLA. Every overdue applicable label remains visible. Cards show priority flags, deduplicated linked locations and checklist progress. Start/resume work directly, pause with a required reason (500 characters maximum), edit unfinished checklists in a sheet and confirm completion. Completing a WO removes it from the active list and updates counts. First starting a linked WO updates approved demo tickets to In progress.
 
-- Dashboard shows the Active total once, then Failed and Waiting over 24 hours. Filter the Active list to inspect runs waiting for approval or WOs. Groups may overlap. The 24-hour threshold is illustrative, not an SLA.
-- Reports show completion outcomes over time, workflows with the most failures and an expandable per-workflow table. Workflow charts use the same calendar buckets as ticket charts.
-- Success rate = succeeded ÷ (succeeded + failed) for runs completed in the period; cancelled and unfinished runs are excluded. Average successful duration includes waiting time. Runs started and WOs created use their own dates.
-- Location and ticket-type filters apply to workflows. A run without a ticket type is excluded when filtering a specific type. Run details show the current step, error and linked records. The prototype does not operate backend workflows.
+## Limits
 
-## GitHub Pages
-
-`base: './'` supports repository paths on GitHub Pages. Hash navigation requires no SPA fallback.
-
-1. Push the project to its GitHub repository.
-2. Settings → Pages → Source: **GitHub Actions**.
-3. The existing deployment workflow builds and publishes `dist`.
-
-```sh
-pnpm build
-pnpm preview
-```
-
-Status labels follow the Operations backend enums: tickets use Submitted, Approved, In progress, Resolved and Cancelled; WOs use To do, In progress, Paused, Completed and Closed. Status codes remain unchanged.
+Authentication, actual notifications/unread badges, real API loading/errors, automatic refresh, server-side exports and native tab navigation are outside this static prototype. Existing list dialogs and WO drawers remain available for drilldowns. The portal switch is a demo navigation aid. No backend conformance or end-to-end API integration is implied by passing UI/model tests.
